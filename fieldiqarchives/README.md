@@ -15,11 +15,6 @@ fieldiq-cloud/
 └── INTEGRACAO-SUPABASE.md      ← guia passo a passo completo (leia primeiro!)
 ```
 
-## Caminho rápido
-1. Leia `INTEGRACAO-SUPABASE.md` — explica exatamente onde colar cada coisa.
-2. Subir para o GitHub (`github.com/andradehub/fieldiq`) e conectar à Vercel — publica online em minutos, com deploy automático a cada `git push`.
-3. Conectar ao banco real: crie um projeto em supabase.com, rode os `.sql`, cole as credenciais no `index.html`.
-
 ## Logins de demonstração (iguais à versão local)
 | Perfil                | Login                | Senha   |
 |------------------------|-----------------------|---------|
