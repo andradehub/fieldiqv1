@@ -12,7 +12,7 @@ fieldiq-cloud/
 ├── supabase/schema.sql         ← cria as tabelas no Supabase (PostgreSQL)
 ├── supabase/seed.sql           ← popula com os dados de demonstração
 ├── vercel.json                 ← configuração de deploy (aponta para /public)
-└── INTEGRACAO-SUPABASE.md      ← guia passo a passo completo (leia primeiro!)
+
 ```
 
 ## Logins de demonstração (iguais à versão local)
