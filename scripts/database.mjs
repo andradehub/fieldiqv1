@@ -11,10 +11,8 @@ try {
   } else if (action === 'export') {
     const directory = path.join(projectRoot,'.fieldiq','exports');
     await mkdir(directory,{recursive:true});
-    for (const region of ['capital','interior']) {
-      const file = path.join(directory,'fieldiq-'+region+'.sql');
-      await writeFile(file,await exportDomainSQL(db,region),'utf8');
-      console.log('SQL exportado: ' + file);
-    }
+    const file=path.join(directory,'fieldiq-dominio.sql');
+    await writeFile(file,await exportDomainSQL(db,{role:'administrativo'}),'utf8');
+    console.log('SQL exportado: '+file);
   } else throw new Error('Use npm run db:init ou npm run db:export.');
 } finally { await db.close(); }

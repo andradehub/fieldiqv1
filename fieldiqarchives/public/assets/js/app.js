@@ -1,8 +1,8 @@
-import {state,routes,isSupervisor,acceptData,canEdit} from './core/state.js';
+import {state,routes,isSupervisor,isAdmin,acceptData,canEdit} from './core/state.js';
 import {api} from './core/api.js';
 import {esc} from './core/format.js';
 import {readImport} from './core/import.js';
-import {icon,button} from './components/ui.js';
+import {icon,button,slaBadge} from './components/ui.js';
 import {renderLogin,renderSidebar,renderTopbar,renderBottomNav} from './views/shell.js';
 import {renderDashboard,mountCharts,disposeCharts} from './views/dashboard.js';
 import {renderTickets,renderTicketDialog,renderAi} from './views/tickets.js';
@@ -10,13 +10,16 @@ import {renderNewTicket,renderNewContext,renderAssetDialog,renderTeamDialog} fro
 import {renderAssets,renderTeam,renderProfile} from './views/operations.js';
 import {renderImports} from './views/imports.js';
 import {renderDatabase} from './views/database.js';
+import {renderUsers,renderUserDialog} from './views/users.js';
+import {renderMigration,renderMigrationDialog} from './views/migration.js';
+import {duration} from './views/attachments.js';
 
 const $=id=>document.getElementById(id);
 const jobs=new Set();
 let databaseRequest=0;
 const freshFilters=()=>({search:'',status:'',priority:'',work:'',technician:'',equipment:'',flag:'',period:'all'});
 const freshTicket=()=>({step:1,titulo:'',descricao:'',elevador_id:'',tipo_obra:'mod_parcial',prioridade:'media',sla_horas:24,tecnico:''});
-const views={dashboard:renderDashboard,chamados:renderTickets,novochamado:renderNewTicket,elevadores:renderAssets,tecnicos:renderTeam,perfil:renderProfile,importacao:renderImports,banco:renderDatabase};
+const views={dashboard:renderDashboard,chamados:renderTickets,novochamado:renderNewTicket,elevadores:renderAssets,tecnicos:renderTeam,usuarios:renderUsers,perfil:renderProfile,importacao:renderImports,banco:renderDatabase};
 
 function toast(message){
   $('toast').textContent=message;
@@ -89,6 +92,7 @@ function navigate(route,{replace=false,focus=true}={}){
   renderShell();renderView();
   if(focus){window.scrollTo({top:0,behavior:'auto'});$('page-title')?.focus({preventScroll:true});}
   if(route==='banco'&&!state.ui.database.info)void loadDatabase();
+  if(route==='usuarios')void loadUsers();
 }
 async function reloadData(){
   acceptData(await api('/bootstrap'));
@@ -99,7 +103,8 @@ function showLogin(){
   $('ticket-dialog').close();$('utility-dialog').close();
   closeMenu(false);
   state.user=null;
-  for(const key of ['zonas','pessoas','locais','elevadores','chamados','importacoes'])state[key]=[];
+  for(const key of ['zonas','pessoas','locais','elevadores','chamados','importacoes','usuarios'])state[key]=[];
+  state.ui.users={};state.ui.migration=null;
   state.ui.ticket=null;state.ui.upload=null;state.ui.newTicket=freshTicket();state.ui.filters=freshFilters();
   databaseRequest++;
   Object.assign(state.ui.database,{info:null,data:null,search:'',error:null});
@@ -158,12 +163,48 @@ async function loadSuggestion(){
 function openTicket(id){
   const c=state.chamados.find(c=>c.id===Number(id));
   if(!c)return;
-  state.ui.ticket={record:c,tab:'overview',ai:null,feedback:null,draft:{
+  state.ui.ticket={record:c,tab:'overview',ai:null,feedback:null,attachments:null,intervals:null,clockLoadedAt:Date.now(),draft:{
     descricao:c.descricao??'',solucao:c.solucao??'',status:c.status,tecnico:c.tecnico??'',tipo_obra:c.tipo_obra,prioridade:c.prioridade,sla_horas:c.sla_horas
   }};
   renderTicket();
   if(!$('ticket-dialog').open)$('ticket-dialog').showModal();
   void loadSuggestion();
+  void loadTicketExtras();
+}
+async function loadTicketExtras(){
+  const current=state.ui.ticket;if(!current)return;
+  try{
+    const [files,times]=await Promise.all([api('/chamados/'+current.record.id+'/anexos'),api('/chamados/'+current.record.id+'/atendimentos')]);
+    if(state.ui.ticket!==current)return;
+    current.attachments=files.anexos;current.intervals=times.atendimentos;current.filesError=null;
+  }catch(error){if(state.ui.ticket===current){current.attachments=[];current.filesError=error.message;}}
+  if(state.ui.ticket===current)renderTicket(true);
+}
+async function loadUsers(){
+  const actor=state.user;
+  state.ui.users??={};state.ui.users.loading=true;state.ui.users.error=null;
+  try{const result=await api('/usuarios');if(state.user===actor)state.usuarios=result.usuarios;}
+  catch(error){if(state.user===actor)state.ui.users.error=error.message;}
+  if(state.user===actor){state.ui.users.loading=false;if(state.ui.route==='usuarios')renderView(true);}
+}
+async function refreshTicket(id,tab='overview'){
+  await reloadData();renderShell();renderView();
+  openTicket(id);if(state.ui.ticket){state.ui.ticket.tab=tab;renderTicket();}
+}
+async function attachFiles(files){
+  const current=state.ui.ticket;if(!current)return;
+  let done=0;const errors=[];
+  for(const file of files){
+    if(file.size>2097152){errors.push(file.name+': máximo 2 MB.');continue;}
+    try{
+      const response=await fetch('/api/chamados/'+current.record.id+'/anexos',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/octet-stream','X-File-Name':encodeURIComponent(file.name)},body:file,signal:AbortSignal.timeout(30000)});
+      const result=await response.json();if(!response.ok)throw new Error(result.error);done++;
+    }catch(error){errors.push(file.name+': '+error.message);}
+  }
+  if(state.ui.ticket!==current)return;
+  await refreshTicket(current.record.id,'files');
+  if(state.ui.ticket){state.ui.ticket.filesError=errors.join(' ');renderTicket();}
+  toast(done+' arquivo(s) anexado(s).'+(errors.length?' Confira os arquivos não enviados.':''));
 }
 function openUtility(kind,tab){
   state.ui.utility={kind,tab};
@@ -219,6 +260,17 @@ document.addEventListener('click',event=>{
   if(target.dataset.route){event.preventDefault();navigate(target.dataset.route);return;}
   const action=target.dataset.action;
   if(action==='open-ticket'){openTicket(target.dataset.id);return;}
+  if(action==='user-open'){
+    const person=state.usuarios.find(p=>p.matricula===target.dataset.registration);
+    $('utility-dialog').innerHTML=renderUserDialog(person);state.ui.utility={kind:'user'};$('utility-dialog').showModal();return;
+  }
+  if(action==='migration-open'){
+    state.ui.migration=null;$('utility-dialog').innerHTML=renderMigrationDialog();state.ui.utility={kind:'migration'};$('utility-dialog').showModal();return;
+  }
+  if(action==='attendance-finish'){
+    const current=state.ui.ticket;if(!current)return;
+    current.tab='edit';current.draft.status='resolvido';renderTicket();$('ed-solucao')?.focus();return;
+  }
   if(action==='close-ticket'){$('ticket-dialog').close();return;}
   if(action==='ticket-tab'){if(state.ui.ticket){state.ui.ticket.tab=target.dataset.tab;renderTicket();$('ticket-dialog').querySelector('.sheet-tabs [data-tab="'+state.ui.ticket.tab+'"]')?.focus();}return;}
   if(action==='toggle-menu'){state.ui.sidebar?closeMenu():openMenu();return;}
@@ -255,6 +307,18 @@ document.addEventListener('click',event=>{
   void execute(target,action,async()=>{
     if(action==='demo-login'){await enterAccount(target.dataset.login,'tk2026');}
     else if(action==='logout'){await api('/auth/logout',{method:'POST'});showLogin();}
+    else if(action==='attendance-start'||action==='attendance-pause'){
+      const c=state.ui.ticket.record;
+      await api('/chamados/'+c.id+'/atendimento',{method:'POST',body:{revisao:c.revisao,acao:action==='attendance-start'?'iniciar':'pausar'}});
+      await refreshTicket(c.id);toast(action==='attendance-start'?'Atendimento iniciado. Horário registrado.':'Atendimento pausado. O SLA continua contando.');
+    }else if(action==='attachment-delete'){
+      const id=state.ui.ticket.record.id;await api('/anexos/'+target.dataset.id,{method:'DELETE'});await refreshTicket(id,'files');toast('Anexo excluído.');
+    }else if(action==='migration-validate'||action==='migration-confirm'){
+      const current=state.ui.migration;if(!current?.pack)throw new Error('Selecione um pacote JSON.');
+      current.result=await api('/migracoes',{method:'POST',body:{pacote:current.pack,confirmar:action==='migration-confirm'}});
+      $('migration-content').innerHTML=renderMigration();
+      if(current.result.importado){await reloadData();renderShell();renderView();toast('Migração concluída.');}
+    }
     else if(action==='refresh'){
       await reloadData();renderShell();renderView();
       if(state.ui.route==='banco')await loadDatabase();
@@ -311,6 +375,15 @@ document.addEventListener('submit',event=>{
     }else if(type==='team'){
       await api('/equipe',{method:'POST',body:data});
       await reloadData();$('utility-dialog').close();renderShell();renderView();toast('Técnico vinculado à equipe.');
+    }else if(type==='user'){
+      const registration=form.dataset.registration;
+      if(!isAdmin()){data.zona_id=state.user.zona_id;data.role='tecnico';}
+      else if(state.usuarios.find(p=>p.matricula===registration)?.role==='administrativo'){data.role='administrativo';data.zona_id=null;}
+      data.ativo=data.ativo==='true';
+      if(!data.cpf&&registration)delete data.cpf;
+      if(!data.senha)delete data.senha;
+      await api(registration?'/usuarios/'+encodeURIComponent(registration):'/usuarios',{method:registration?'PATCH':'POST',body:data});
+      $('utility-dialog').close();await reloadData();await loadUsers();renderShell();renderView();toast('Colaborador salvo.');
     }
   });
 });
@@ -325,6 +398,7 @@ document.addEventListener('input',event=>{
   if(target.dataset.input==='ticket-search'){state.ui.ticketPage=1;state.ui.filters.search=target.value;renderView(true);}
   if(target.dataset.input==='asset-search'){state.ui.assets.search=target.value;renderView(true);}
   if(target.dataset.input==='db-search'){state.ui.database.search=target.value;renderView(true);}
+  if(target.dataset.input==='user-search'){state.ui.users??={};state.ui.users.search=target.value;renderView(true);}
 });
 document.addEventListener('change',event=>{
   const target=event.target;
@@ -340,6 +414,15 @@ document.addEventListener('change',event=>{
   if(target.dataset.change==='period'){state.ui.period=target.value;renderView(true);}
   if(target.dataset.change==='asset-zone'){state.ui.assets.zone=target.value;renderView(true);}
   if(target.dataset.change==='import-file')void chooseFile(target.files[0]);
+  if(target.dataset.change==='ticket-files')void execute(null,'ticket-files',()=>attachFiles([...target.files]));
+  if(target.dataset.change==='user-role'||target.dataset.change==='user-zone'){state.ui.users??={};state.ui.users[target.dataset.change==='user-role'?'role':'zone']=target.value;renderView(true);}
+  if(target.dataset.change==='migration-file')void execute(null,'migration-file',async()=>{
+    const file=target.files[0];if(!file)return;
+    if(file.size>2000000)throw new Error('Selecione um JSON de até 2 MB.');
+    const pack=JSON.parse(await file.text());
+    if(pack.formato!=='fieldiq-legado-v1')throw new Error('Use o modelo de migração disponível para download.');
+    state.ui.migration={file,pack,result:null};$('migration-content').innerHTML=renderMigration();
+  });
   if(target.dataset.change==='profile-photo')void execute(null,'profile-photo',()=>changePhoto(target.files[0]));
 });
 document.addEventListener('dragover',event=>{
@@ -371,6 +454,21 @@ document.addEventListener('keydown',event=>{
 window.matchMedia('(max-width:767px)').addEventListener('change',syncMenu);
 window.addEventListener('fieldiq:session-expired',()=>{if(state.user){showLogin();toast('Sua sessão expirou. Entre novamente.');}});
 window.addEventListener('popstate',()=>{if(state.user)navigate(location.hash.slice(1),{replace:true});});
+setInterval(()=>{
+  const current=state.ui.ticket;if(!current)return;
+  const c=current.record,work=document.querySelector('[data-attendance-duration]'),elapsed=document.querySelector('[data-ticket-elapsed]');
+  if(work)work.textContent=duration(Number(c.tempo_atendimento_seg)+(c.atendimento_ativo_desde?(Date.now()-current.clockLoadedAt)/1000:0));
+  if(elapsed&&['aberto','em_andamento'].includes(c.status))elapsed.textContent=duration((Date.now()-new Date(c.aberto_em))/1000);
+  if(['aberto','em_andamento'].includes(c.status)){
+    const overdue=Date.now()>new Date(c.aberto_em).getTime()+c.sla_horas*3600000;
+    if(overdue!==c.sla_vencido){c.sla_vencido=overdue;if($('ticket-sla'))$('ticket-sla').innerHTML=slaBadge(c);}
+  }
+},1000);
+setInterval(()=>{
+  if(!state.user||document.hidden||$('ticket-dialog').open||$('utility-dialog').open||jobs.size)return;
+  if(!['dashboard','chamados','tecnicos','perfil'].includes(state.ui.route))return;
+  void execute(null,'auto-refresh',async()=>{await reloadData();renderView(true);});
+},30000);
 
 (async()=>{
   $('login-root').innerHTML='<div class="loading-state"><span class="spinner"></span>Preparando sua operação…</div>';

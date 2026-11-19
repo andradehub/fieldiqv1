@@ -1,6 +1,6 @@
 export const state = {
   user:null, zonas:[], pessoas:[], locais:[], elevadores:[], chamados:[], importacoes:[],
-  config:{demo:true,quickDemo:false}, updatedAt:null,
+  config:{demo:true,quickDemo:false}, updatedAt:null, usuarios:[],
   ui:{
     route:'dashboard', period:'all', sidebar:false,
     filters:{search:'',status:'',priority:'',work:'',technician:'',equipment:''},
@@ -16,14 +16,17 @@ export const routes = {
   novochamado:{label:'Novo chamado',icon:'CirclePlus',section:'Operação',supervisor:true},
   elevadores:{label:'Elevadores e locais',icon:'Building2',section:'Operação'},
   tecnicos:{label:'Equipe de campo',icon:'UsersRound',section:'Gestão'},
+  usuarios:{label:'Gestão de usuários',icon:'UserRoundCog',section:'Gestão',supervisor:true},
   importacao:{label:'Importar dados',icon:'Upload',section:'Gestão',supervisor:true},
   banco:{label:'Banco de dados',icon:'Database',section:'Sistema',supervisor:true},
   perfil:{label:'Meu perfil',icon:'UserRound',section:'Sistema'}
 };
-export const isSupervisor=()=>state.user?.role==='supervisor';
-export const canEdit=ticket=>isSupervisor()?ticket.zona_id===state.user.zona_id:ticket.tecnico===state.user.matricula&&ticket.status!=='cancelado';
-export const team=()=>state.pessoas.filter(p=>p.role==='tecnico'&&p.zona_id===state.user?.zona_id);
-export const regionName=()=>state.user?.regiao==='capital'?'Capital · Rio de Janeiro':'Interior · Rio de Janeiro';
+export const isAdmin=()=>state.user?.role==='administrativo';
+export const isSupervisor=()=>['supervisor','administrativo'].includes(state.user?.role);
+export const roleName=role=>({administrativo:'Administrativo / RH',supervisor:'Supervisor',tecnico:'Técnico de campo'})[role]??role;
+export const canEdit=ticket=>isAdmin()||(isSupervisor()?ticket.zona_id===state.user.zona_id:ticket.tecnico===state.user.matricula&&ticket.status!=='cancelado');
+export const team=()=>{const lift=state.elevadores.find(e=>String(e.id)===String(state.ui.newTicket.elevador_id));const zone=isAdmin()?(state.ui.ticket?.record.zona_id??lift?.zona_id):state.user?.zona_id;return state.pessoas.filter(p=>p.role==='tecnico'&&p.ativo&&p.zona_id===zone);};
+export const regionName=()=>isAdmin()?'Todas as regiões':state.user?.regiao==='capital'?'Capital · Rio de Janeiro':'Interior · Rio de Janeiro';
 export const zoneName=id=>{const z=state.zonas.find(z=>z.id===id);return z?z.nome+' · '+z.local:'Sem zona vinculada';};
 export const personName=id=>state.pessoas.find(p=>p.matricula===id)?.nome??'Não atribuído';
 export function acceptData(data){

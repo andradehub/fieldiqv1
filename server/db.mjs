@@ -4,7 +4,8 @@ import path from 'node:path';
 import { seedDatabase } from './seed.mjs';
 
 export const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-export const schemaSQL = await readFile(new URL('../database/001-schema.sql', import.meta.url), 'utf8');
+const migrations = await Promise.all(['001-schema.sql','002-operacao.sql'].map(async name => ({name,sql:await readFile(new URL('../database/'+name,import.meta.url),'utf8')})));
+export const schemaSQL = migrations.map(m=>m.sql).join('\n');
 
 export async function createDatabase(options = {}) {
   const url = options.url ?? process.env.DATABASE_URL;
@@ -65,10 +66,20 @@ export async function createDatabase(options = {}) {
   try {
     await adapter.transaction(async tx => {
       if (url) await tx.query('SELECT pg_advisory_xact_lock(1729001)');
-      // pg accepts multiple statements; PGlite.query accepts a single one.
-      for (const statement of schemaSQL.replace(/--[^\n]*/g, '').split(';').map(s => s.trim()).filter(Boolean)) await tx.query(statement);
+      await tx.query('CREATE SCHEMA IF NOT EXISTS fieldiq');
+      await tx.query('SET search_path TO fieldiq, public');
+      await tx.query('CREATE TABLE IF NOT EXISTS schema_migrations (nome text PRIMARY KEY, aplicada_em timestamptz NOT NULL DEFAULT now())');
+      for (const migration of migrations) {
+        if ((await tx.query('SELECT nome FROM schema_migrations WHERE nome=$1',[migration.name])).rows.length) continue;
+        for (const statement of migration.sql.replace(/--[^\n]*/g,'').split(';').map(s=>s.trim()).filter(Boolean)) await tx.query(statement);
+        await tx.query('INSERT INTO schema_migrations(nome) VALUES ($1)',[migration.name]);
+      }
       const count = await tx.query('SELECT count(*)::int AS n FROM pessoas');
       if (demo && count.rows[0].n === 0) await seedDatabase(tx, options.password ?? process.env.DEMO_PASSWORD ?? 'tk2026');
+      if (demo && !(await tx.query("SELECT matricula FROM pessoas WHERE role='administrativo'")).rows.length) {
+        const {hashPassword}=await import('./auth.mjs');
+        await tx.query("INSERT INTO pessoas(matricula,nome,role,cargo,regiao,zona_id,login,senha_hash) VALUES ('ADM-DEMO-001','Alex Ribeiro','administrativo','Administrativo / RH',NULL,NULL,'administrativo', $1)",[await hashPassword(options.password ?? process.env.DEMO_PASSWORD ?? 'tk2026')]);
+      }
     });
     if (!url) await adapter.query('SET search_path TO fieldiq, public');
     return { ...adapter, demo };

@@ -15,7 +15,7 @@ export async function verifyPassword(password, stored) {
 export const hashToken = token => createHash('sha256').update(token).digest('hex');
 export const newToken = () => randomBytes(32).toString('hex');
 export function publicPerson(person) {
-  const { senha_hash, ...safe } = person;
+  const { senha_hash, cpf, ...safe } = person;
   return safe;
 }
 export function readToken(req) {

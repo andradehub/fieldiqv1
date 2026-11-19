@@ -16,7 +16,7 @@ const directory=path.join(projectRoot,'test-results','redesign');
 await mkdir(directory,{recursive:true});
 const browser=await chromium.launch({channel:'msedge',headless:true});
 const errors=[],accessibility=[];
-const pageNames={dashboard:'Visão geral',chamados:'Chamados',novochamado:'Novo chamado',elevadores:'Elevadores e locais',tecnicos:'Equipe de campo',importacao:'Importar chamados',banco:'Banco de dados',perfil:'Meu perfil'};
+const pageNames={dashboard:'Visão geral',chamados:'Chamados',novochamado:'Novo chamado',elevadores:'Elevadores e locais',tecnicos:'Equipe de campo',usuarios:'Gestão de usuários',importacao:'Importar chamados',banco:'Banco de dados',perfil:'Meu perfil'};
 async function login(page,who){
   await page.goto(base,{waitUntil:'domcontentloaded'});
   await page.locator('[data-action="demo-login"][data-login="'+who+'"]').click();
@@ -123,6 +123,42 @@ try{
   await navigate(page,'banco');await page.locator('.database-data tbody tr').first().waitFor();
   const exported=await page.request.get(base+'/api/banco/export');
   assert.equal(exported.status(),200);assert.match(await exported.text(),/INSERT INTO chamados/);
+  await navigate(page,'usuarios');
+  await page.locator('[data-action="user-open"]').first().click();
+  await page.locator('#user-name').fill('Colaborador fictício da interface');
+  await page.locator('#user-registration').fill('UI-TEST');await page.locator('#user-cpf').fill('52998224725');
+  assert.equal(await page.locator('#user-zone').isDisabled(),true);
+  assert.equal(await page.locator('#user-role option').count(),1);
+  await page.locator('#user-email').fill('ui@example.com');await page.locator('#user-phone').fill('(21) 00000-0000');
+  await page.locator('#user-admission').fill('2026-01-02');await page.locator('#user-login').fill('colaborador.ui');await page.locator('#user-password').fill('senha-ficticia-ui');
+  await axe(page,'cadastro de técnico pelo supervisor');await screenshot(page,'desktop-usuario-cadastro');
+  await page.locator('form[data-form="user"] button[type="submit"]').click();await page.locator('#utility-dialog').waitFor({state:'hidden'});
+  await page.locator('#user-search').fill('UI-TEST');await page.locator('.users-panel tbody').filter({hasText:'Colaborador fictício'}).waitFor();
+  await page.locator('[data-action="user-open"][data-registration="UI-TEST"]').click();await page.locator('#user-phone').fill('(21) 99999-0000');
+  await page.locator('form[data-form="user"] button[type="submit"]').click();await page.locator('#utility-dialog').waitFor({state:'hidden'});
+  assert.match(await page.locator('.users-panel tbody').innerText(),/99999-0000/);
+  const newCall=await page.request.post(base+'/api/chamados',{data:{titulo:'Atendimento com evidências — teste fictício',elevador_id:1,tecnico:'TK-CAP-001',sla_horas:1}});assert.equal(newCall.status(),201);const callId=(await newCall.json()).id;
+  await db.query("UPDATE chamados SET aberto_em=now()-interval '2 hours' WHERE id=$1",[callId]);
+  await page.locator('#sidebar [data-action="logout"]').click();await page.locator('[data-login="tecnico.capital"]').click();await page.locator('#page-title').waitFor();
+  await navigate(page,'chamados');await page.locator('#ticket-search').fill('Atendimento com evidências');await page.locator('[data-action="open-ticket"][data-id="'+callId+'"]').click();
+  await page.locator('[data-action="attendance-start"]').click();await page.locator('[data-action="attendance-pause"]').waitFor();
+  assert.match(await page.locator('.timing-grid').innerText(),/em atendimento/);
+  await page.locator('[data-action="attendance-pause"]').click();await page.locator('[data-action="attendance-start"]').filter({hasText:'Retomar atendimento'}).waitFor();
+  await page.locator('[data-action="attendance-start"]').click();await page.locator('[data-action="attendance-pause"]').waitFor();
+  await page.locator('[data-action="ticket-tab"][data-tab="files"]').click();
+  await page.locator('#ticket-files').setInputFiles([{name:'relatorio-ficticio.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4\nEvidência fictícia\n%%EOF')},{name:'foto-ficticia.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2ioAAAAASUVORK5CYII=','base64')}]);
+  await page.locator('.attachment-card').nth(1).waitFor();assert.equal(await page.locator('.attachment-card').count(),2);
+  await page.locator('.attachment-preview img').waitFor();await axe(page,'fotos e documentos');await screenshot(page,'desktop-anexos');
+  const downloadPromise=page.waitForEvent('download');await page.locator('.attachment-info a').first().click();const download=await downloadPromise;assert.equal(download.suggestedFilename(),'relatorio-ficticio.pdf');
+  await page.locator('[data-action="attendance-finish"]').click();await page.locator('#ed-solucao').fill('Solução fictícia com evidências anexadas.');await page.locator('#ticket-save').click();await page.locator('#ticket-dialog').waitFor({state:'hidden'});
+  await page.locator('[data-action="open-ticket"][data-id="'+callId+'"]').click();await page.locator('.sheet-tags').filter({hasText:'Resolvido'}).waitFor();await page.locator('.timing-grid').filter({hasText:'Tempo de resolução'}).waitFor();await screenshot(page,'desktop-tempos-conclusao');await page.keyboard.press('Escape');
+  const resolvedCall=(await db.query('SELECT * FROM vw_chamados_metricas WHERE id=$1',[callId])).rows[0];assert.equal(resolvedCall.sla_cumprido,false);assert.ok(resolvedCall.iniciado_em&&resolvedCall.resolvido_em);
+  await page.locator('#sidebar [data-action="logout"]').click();await page.locator('[data-login="administrativo"]').click();await page.locator('#page-title').waitFor();
+  await navigate(page,'usuarios');await page.locator('[data-action="user-open"]').first().click();assert.equal(await page.locator('#user-zone').isDisabled(),false);assert.equal(await page.locator('#user-role option').count(),2);await axe(page,'cadastro administrativo');await page.keyboard.press('Escape');
+  await navigate(page,'importacao');await page.locator('[data-action="migration-open"]').click();await page.locator('#migration-file').setInputFiles(path.join(projectRoot,'fieldiqarchives/public/exemplo-migracao.json'));
+  await page.locator('[data-action="migration-validate"]').click();await page.locator('[data-action="migration-confirm"]').waitFor();await axe(page,'validação de migração');await screenshot(page,'desktop-migracao');
+  await page.locator('[data-action="migration-confirm"]').click();await page.locator('#migration-content').filter({hasText:'Migração concluída'}).waitFor();await page.keyboard.press('Escape');
+  await navigate(page,'usuarios');await page.locator('#user-search').fill('LEG-100');await page.locator('.users-panel tbody').filter({hasText:'Inativo'}).waitFor();
   await context.close();
 
   for(const width of [320,375,390,430,768,834,1024]){
@@ -178,7 +214,7 @@ try{
   const violations=accessibility.flatMap(result=>result.violations.map(v=>({...v,screen:result.label})));
   assert.deepEqual(errors,[],'Erros JavaScript');
   assert.deepEqual(violations,[],'Violações detectadas pelo axe');
-  console.log(JSON.stringify({status:'passed',viewports:[320,375,390,430,768,834,1024,1440],screens:8,accessibilityScans:accessibility.length,safari,captures:directory}));
+  console.log(JSON.stringify({status:'passed',viewports:[320,375,390,430,768,834,1024,1440],screens:Object.keys(pageNames).length,accessibilityScans:accessibility.length,safari,captures:directory}));
 }finally{
   await writeFile(path.join(directory,'accessibility.json'),JSON.stringify(accessibility,null,2));
   await browser.close();await new Promise(r=>server.close(r));await db.close();

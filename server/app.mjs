@@ -4,47 +4,23 @@ import { createHash } from 'node:crypto';
 import { publicPerson, verifyPassword, readToken, hashToken, newToken } from './auth.mjs';
 import { projectRoot, schemaSQL } from './db.mjs';
 import { suggestForTicket } from './ai.mjs';
+import {ApiError,insist,text,optionalText,oneOf,integer,supervisor,canEdit,getTicket,isAdmin,manages,canReadZone,scopeParams} from './permissions.mjs';
+import {registerUserRoutes} from './users.mjs';
+import {registerAttachmentRoutes} from './attachments.mjs';
+import {registerAttendanceRoutes,closeIntervals,beginInterval} from './attendance.mjs';
+import {registerMigrationRoutes} from './migration.mjs';
 
-export class ApiError extends Error {
-  constructor(status, message) { super(message); this.status = status; }
-}
-function insist(condition, status, message) { if (!condition) throw new ApiError(status, message); }
-function text(value, label, max = 10000) {
-  insist(typeof value === 'string' && value.trim().length > 0 && value.length <= max, 400, label + ' inválido.');
-  return value.trim();
-}
-function optionalText(value, max = 10000) {
-  insist(value == null || (typeof value === 'string' && value.length <= max), 400, 'Texto inválido.');
-  return (value ?? '').trim();
-}
-function oneOf(value, options, label) { insist(options.includes(value), 400, label + ' inválido.'); return value; }
-function integer(value, label, min = 1, max = 2147483647) {
-  const n = Number(value);
-  insist(Number.isInteger(n) && n >= min && n <= max, 400, label + ' inválido.');
-  return n;
-}
-function supervisor(user) { insist(user.role === 'supervisor', 403, 'Ação exclusiva do supervisor.'); }
-function canEdit(user, ticket) {
-  return user.role === 'supervisor' ? ticket.zona_id === user.zona_id : ticket.tecnico_matricula === user.matricula;
-}
-async function getTicket(db, id, user, lock = false) {
-  const n = integer(id, 'Chamado');
-  const result = await db.query('SELECT * FROM vw_chamados_metricas WHERE id=$1 AND regiao=$2', [n,user.regiao]);
-  insist(result.rows.length, 404, 'Chamado não encontrado.');
-  if (lock) await db.query('SELECT id FROM chamados WHERE id=$1 FOR UPDATE', [n]);
-  // Read again after acquiring the lock so concurrent revisions cannot overwrite one another.
-  return lock ? (await db.query('SELECT * FROM vw_chamados_metricas WHERE id=$1', [n])).rows[0] : result.rows[0];
-}
+export {ApiError};
 async function equipment(db, id, user) {
   const result = await db.query('SELECT e.*, l.zona_id, z.regiao FROM elevadores e JOIN locais l ON l.id=e.local_id JOIN zonas z ON z.id=l.zona_id WHERE e.id=$1', [integer(id,'Elevador')]);
   const e = result.rows[0];
-  insist(e && e.regiao === user.regiao, 404, 'Elevador não encontrado.');
-  insist(e.zona_id === user.zona_id && e.ativo, 403, 'Escolha um elevador ativo da sua zona.');
+  insist(e, 404, 'Elevador não encontrado.');
+  insist(canReadZone(user,e.zona_id) && e.ativo, 403, 'Escolha um elevador ativo da sua zona.');
   return e;
 }
-async function technician(db, matricula, zone) {
+async function technician(db, matricula, zone, allowInactive=false) {
   if (!matricula) return null;
-  const result = await db.query("SELECT matricula FROM pessoas WHERE matricula=$1 AND role='tecnico' AND ativo AND zona_id=$2", [text(matricula,'Matrícula',40),zone]);
+  const result = await db.query("SELECT matricula FROM pessoas WHERE matricula=$1 AND role='tecnico' AND (ativo OR $3::boolean) AND zona_id=$2", [text(matricula,'Matrícula',40),zone,allowInactive]);
   insist(result.rows.length, 400, 'O técnico precisa pertencer à equipe da zona do elevador.');
   return matricula;
 }
@@ -52,9 +28,9 @@ const works = ['obra_nova','mod_integral','mod_parcial'];
 const priorities = ['baixa','media','alta','critica'];
 const statuses = ['aberto','em_andamento','resolvido','cancelado'];
 
-async function insertTicket(db, body, user, imported = false) {
+export async function insertTicket(db, body, user, imported = false) {
   const e = await equipment(db, body.elevador_id, user);
-  const tech = await technician(db, body.tecnico || null, e.zona_id);
+  const tech = await technician(db, body.tecnico || null, e.zona_id,imported);
   const status = imported ? oneOf(body.status ?? 'aberto',statuses,'Status') : 'aberto';
   const title = text(body.titulo,'Título',200);
   const desc = optionalText(body.descricao);
@@ -78,15 +54,17 @@ async function insertTicket(db, body, user, imported = false) {
 
 // Only domain data is exposed. Password hashes and sessions never enter this catalogue.
 const tableQueries = {
-  zonas: 'SELECT * FROM zonas WHERE regiao=$1',
-  pessoas: 'SELECT matricula,nome,role,cargo,regiao,zona_id,login,ativo FROM pessoas WHERE regiao=$1',
-  locais: 'SELECT l.* FROM locais l JOIN zonas z ON z.id=l.zona_id WHERE z.regiao=$1',
-  elevadores: 'SELECT e.* FROM elevadores e JOIN locais l ON l.id=e.local_id JOIN zonas z ON z.id=l.zona_id WHERE z.regiao=$1',
-  chamados: 'SELECT c.* FROM chamados c JOIN vw_chamados_metricas v ON v.id=c.id WHERE v.regiao=$1',
-  historico_chamados: 'SELECT h.* FROM historico_chamados h JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE c.regiao=$1',
-  importacoes: 'SELECT i.* FROM importacoes i JOIN pessoas p ON p.matricula=i.usuario_matricula WHERE p.regiao=$1',
-  sugestoes_ia: 'SELECT s.* FROM sugestoes_ia s JOIN vw_chamados_metricas c ON c.id=s.chamado_id WHERE c.regiao=$1',
-  avaliacoes_ia: 'SELECT a.* FROM avaliacoes_ia a JOIN sugestoes_ia s ON s.id=a.sugestao_id JOIN vw_chamados_metricas c ON c.id=s.chamado_id WHERE c.regiao=$1'
+  zonas: 'SELECT * FROM zonas WHERE ($1::boolean OR id=$2)',
+  pessoas: 'SELECT matricula,nome,role,cargo,regiao,zona_id,login,ativo FROM pessoas WHERE ($1::boolean OR zona_id=$2)',
+  locais: 'SELECT l.* FROM locais l WHERE ($1::boolean OR l.zona_id=$2)',
+  elevadores: 'SELECT e.* FROM elevadores e JOIN locais l ON l.id=e.local_id WHERE ($1::boolean OR l.zona_id=$2)',
+  chamados: 'SELECT c.* FROM chamados c JOIN vw_chamados_metricas v ON v.id=c.id WHERE ($1::boolean OR v.zona_id=$2)',
+  historico_chamados: 'SELECT h.* FROM historico_chamados h JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
+  importacoes: 'SELECT i.* FROM importacoes i JOIN pessoas p ON p.matricula=i.usuario_matricula WHERE ($1::boolean OR p.zona_id=$2)',
+  sugestoes_ia: 'SELECT s.* FROM sugestoes_ia s JOIN vw_chamados_metricas c ON c.id=s.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
+  avaliacoes_ia: 'SELECT a.* FROM avaliacoes_ia a JOIN sugestoes_ia s ON s.id=a.sugestao_id JOIN vw_chamados_metricas c ON c.id=s.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
+  atendimentos: 'SELECT a.* FROM atendimentos a JOIN vw_chamados_metricas c ON c.id=a.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
+  anexos_chamados: 'SELECT a.id,a.chamado_id,a.usuario_matricula,a.nome,a.tipo,a.tamanho,a.sha256,a.criado_em FROM anexos_chamados a JOIN vw_chamados_metricas c ON c.id=a.chamado_id WHERE ($1::boolean OR c.zona_id=$2)'
 };
 function sqlValue(value) {
   if (value == null) return 'NULL';
@@ -95,10 +73,12 @@ function sqlValue(value) {
   const str = value instanceof Date ? value.toISOString() : typeof value === 'object' ? JSON.stringify(value) : String(value);
   return "'" + str.replaceAll("'", "''") + "'";
 }
-export async function exportDomainSQL(db, region) {
-  let sql = '-- FieldIQ: exportacao dos dados de dominio da regiao ' + region + '.\n-- Nao inclui senhas ou sessoes; nao substitui backup completo.\nBEGIN;\n' + schemaSQL + '\n';
+export async function exportDomainSQL(db, user={role:'administrativo'}) {
+  const params=scopeParams(typeof user==='object'?user:{role:'administrativo'});
+  let sql = '-- FieldIQ: exportacao de dados de dominio.\n-- Nao inclui senhas, CPF, contatos, sessoes ou arquivos anexados; nao substitui backup completo.\nBEGIN;\n' + schemaSQL + '\n';
   for (const [table,query] of Object.entries(tableQueries)) {
-    const result = await db.query(query,[region]);
+    if(table==='anexos_chamados')continue;
+    const result = table==='pessoas' ? await db.query("SELECT matricula,nome,role,cargo,CASE WHEN ($1::boolean OR zona_id=$2) THEN regiao ELSE NULL END AS regiao,CASE WHEN ($1::boolean OR zona_id=$2) THEN zona_id ELSE NULL END AS zona_id,CASE WHEN ($1::boolean OR zona_id=$2) THEN login ELSE NULL END AS login,ativo FROM pessoas WHERE ($1::boolean OR zona_id=$2) OR matricula IN (SELECT criado_por FROM vw_chamados_metricas WHERE zona_id=$2 UNION SELECT tecnico_matricula FROM vw_chamados_metricas WHERE zona_id=$2 UNION SELECT h.usuario_matricula FROM historico_chamados h JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE c.zona_id=$2 UNION SELECT a.usuario_matricula FROM avaliacoes_ia a JOIN sugestoes_ia s ON s.id=a.sugestao_id JOIN vw_chamados_metricas c ON c.id=s.chamado_id WHERE c.zona_id=$2 UNION SELECT a.tecnico_matricula FROM atendimentos a JOIN vw_chamados_metricas c ON c.id=a.chamado_id WHERE c.zona_id=$2)",params) : await db.query(query,params);
     for (const row of result.rows) {
       const keys = Object.keys(row);
       sql += 'INSERT INTO ' + table + ' (' + keys.join(',') + ') VALUES (' + keys.map(k => sqlValue(row[k])).join(',') + ') ON CONFLICT DO NOTHING;\n';
@@ -164,15 +144,15 @@ export function createApp(db) {
     res.clearCookie('fieldiq_session',{...cookieOptions,maxAge:undefined}).json({ok:true});
   });
   api.get('/bootstrap',async (req,res) => {
-    const region = req.user.regiao;
+    const params = scopeParams(req.user);
     const [zones,people,places,lifts,tickets,history,imports] = await Promise.all([
-      db.query('SELECT * FROM zonas WHERE regiao=$1 ORDER BY id',[region]),
-      db.query('SELECT matricula,nome,role,cargo,regiao,zona_id,foto,ativo FROM pessoas WHERE regiao=$1 ORDER BY nome',[region]),
-      db.query(tableQueries.locais + ' ORDER BY l.nome',[region]),
-      db.query('SELECT e.*,l.nome AS local_nome,l.zona_id FROM elevadores e JOIN locais l ON l.id=e.local_id JOIN zonas z ON z.id=l.zona_id WHERE z.regiao=$1 ORDER BY e.codigo',[region]),
-      db.query('SELECT *,tecnico_matricula AS tecnico FROM vw_chamados_metricas WHERE regiao=$1 ORDER BY aberto_em DESC,id DESC',[region]),
-      db.query('SELECT h.*,p.nome AS usuario,p.matricula FROM historico_chamados h JOIN pessoas p ON p.matricula=h.usuario_matricula JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE c.regiao=$1 ORDER BY h.data,h.id',[region]),
-      req.user.role === 'supervisor' ? db.query('SELECT * FROM importacoes WHERE usuario_matricula=$1 ORDER BY data DESC LIMIT 50',[req.user.matricula]) : {rows:[]}
+      db.query(tableQueries.zonas+' ORDER BY id',params),
+      db.query('SELECT matricula,nome,role,cargo,regiao,zona_id,foto,ativo FROM pessoas WHERE ($1::boolean OR zona_id=$2) ORDER BY nome',params),
+      db.query(tableQueries.locais + ' ORDER BY l.nome',params),
+      db.query('SELECT e.*,l.nome AS local_nome,l.zona_id FROM elevadores e JOIN locais l ON l.id=e.local_id WHERE ($1::boolean OR l.zona_id=$2) ORDER BY e.codigo',params),
+      db.query('SELECT *,tecnico_matricula AS tecnico FROM vw_chamados_metricas WHERE ($1::boolean OR zona_id=$2) ORDER BY aberto_em DESC,id DESC',params),
+      db.query('SELECT h.*,p.nome AS usuario,p.matricula FROM historico_chamados h JOIN pessoas p ON p.matricula=h.usuario_matricula JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE ($1::boolean OR c.zona_id=$2) ORDER BY h.data,h.id',params),
+      manages(req.user) ? db.query('SELECT * FROM importacoes WHERE usuario_matricula=$1 ORDER BY data DESC LIMIT 50',[req.user.matricula]) : {rows:[]}
     ]);
     res.json({user:req.user,zonas:zones.rows,pessoas:people.rows,locais:places.rows,elevadores:lifts.rows,chamados:tickets.rows.map(c => ({...c,historico:history.rows.filter(h => h.chamado_id === c.id)})),importacoes:imports.rows});
   });
@@ -186,7 +166,7 @@ export function createApp(db) {
       const c = await getTicket(tx,req.params.id,req.user,true);
       insist(canEdit(req.user,c),403,'Você só pode alterar chamados sob sua responsabilidade.');
       insist(integer(req.body.revisao,'Revisão') === c.revisao,409,'O chamado foi alterado por outra pessoa. Atualize a página.');
-      const supervisorRole = req.user.role === 'supervisor';
+      const supervisorRole = manages(req.user);
       const allowed = supervisorRole ? ['descricao','solucao','status','tipo_obra','prioridade','sla_horas','tecnico','revisao'] : ['descricao','solucao','status','revisao'];
       insist(Object.keys(req.body).every(k => allowed.includes(k)),403,'Alteração não permitida para seu perfil.');
       const status = oneOf(req.body.status ?? c.status,statuses,'Status');
@@ -200,6 +180,8 @@ export function createApp(db) {
       const priority = oneOf(req.body.prioridade ?? c.prioridade,priorities,'Prioridade');
       const sla = integer(req.body.sla_horas ?? c.sla_horas,'SLA',1,8760);
       const tech = 'tecnico' in req.body ? await technician(tx,req.body.tecnico,c.zona_id) : c.tecnico_matricula;
+      if(c.atendimento_ativo_desde&&(status!=='em_andamento'||tech!==c.tecnico_matricula))await closeIntervals(tx,c.id);
+      if(status==='em_andamento'&&c.status!=='em_andamento'&&tech){await beginInterval(tx,{...c,tecnico_matricula:tech},req.user);}
       const closed = status === 'resolvido' ? (c.resolvido_em ?? new Date().toISOString()) : null;
       await tx.query('UPDATE chamados SET descricao=$1,solucao=$2,status=$3,tipo_obra=$4,prioridade=$5,sla_horas=$6,tecnico_matricula=$7,resolvido_em=$8,revisao=revisao+1 WHERE id=$9',[desc,solution,status,work,priority,sla,tech,closed,c.id]);
       const changes = [];
@@ -217,13 +199,15 @@ export function createApp(db) {
   });
   api.post('/locais',async (req,res) => {
     supervisor(req.user);
-    insist(req.user.zona_id,400,'Supervisor sem zona vinculada.');
-    const {rows} = await db.query('INSERT INTO locais (nome,endereco,bairro,zona_id) VALUES ($1,$2,$3,$4) RETURNING id',[text(req.body.nome,'Nome',150),text(req.body.endereco,'Endereço',300),text(req.body.bairro,'Bairro',100),req.user.zona_id]);
+    const zone=isAdmin(req.user)?text(req.body.zona_id,'Zona',80):req.user.zona_id;
+    insist(zone,400,'Selecione uma zona.');
+    if(!isAdmin(req.user))insist(!req.body.zona_id||req.body.zona_id===zone,403,'Cadastre apenas na sua zona.');
+    const {rows} = await db.query('INSERT INTO locais (nome,endereco,bairro,zona_id) VALUES ($1,$2,$3,$4) RETURNING id',[text(req.body.nome,'Nome',150),text(req.body.endereco,'Endereço',300),text(req.body.bairro,'Bairro',100),zone]);
     res.status(201).json(rows[0]);
   });
   api.post('/elevadores',async (req,res) => {
     supervisor(req.user);
-    const {rows} = await db.query('SELECT id FROM locais WHERE id=$1 AND zona_id=$2',[integer(req.body.local_id,'Local'),req.user.zona_id]);
+    const {rows} = await db.query('SELECT id FROM locais WHERE id=$1 AND ($2::boolean OR zona_id=$3)',[integer(req.body.local_id,'Local'),...scopeParams(req.user)]);
     insist(rows.length,403,'Selecione um local da sua zona.');
     const code = text(req.body.codigo,'Código',40).toUpperCase();
     insist(/^[A-Z0-9_-]+$/.test(code),400,'Código: use letras, números, hífen ou sublinhado.');
@@ -232,19 +216,8 @@ export function createApp(db) {
   });
   api.post('/equipe',async (req,res) => {
     supervisor(req.user);
-    const mat = text(req.body.matricula,'Matrícula',40).toUpperCase();
-    await db.transaction(async tx => {
-      const {rows} = await tx.query("SELECT * FROM pessoas WHERE matricula=$1 AND role='tecnico' AND regiao=$2 FOR UPDATE",[mat,req.user.regiao]);
-      const p = rows[0];
-      insist(p,404,'Técnico não encontrado na sua região.');
-      const removing = req.body.remover === true;
-      insist(!removing || p.zona_id === req.user.zona_id,403,'O técnico não pertence à sua equipe.');
-      insist(removing || req.user.zona_id,400,'Supervisor sem zona.');
-      const active = await tx.query("SELECT id FROM chamados WHERE tecnico_matricula=$1 AND status IN ('aberto','em_andamento')",[mat]);
-      insist(!active.rows.length || (!removing && p.zona_id === req.user.zona_id),409,'Reatribua os chamados pendentes antes de mover este técnico.');
-      await tx.query('UPDATE pessoas SET zona_id=$1 WHERE matricula=$2',[removing ? null : req.user.zona_id,mat]);
-    });
-    res.json({ok:true});
+    insist(isAdmin(req.user),403,'Transferências de zona são exclusivas do Administrativo. Use o cadastro de usuários.');
+    throw new ApiError(410,'Gerencie os vínculos pela Gestão de usuários.');
   });
   api.patch('/perfil',async (req,res) => {
     const foto = text(req.body.foto,'Foto',2*1024*1024);
@@ -276,7 +249,7 @@ export function createApp(db) {
   });
   api.post('/chamados/:id/sugestao',async (req,res) => {
     const ticket = await getTicket(db,req.params.id,req.user);
-    const {rows} = await db.query('SELECT * FROM vw_chamados_metricas WHERE regiao=$1 AND id<>$2 AND aberto_em<$3',[req.user.regiao,ticket.id,ticket.aberto_em]);
+    const {rows} = await db.query('SELECT * FROM vw_chamados_metricas WHERE zona_id=$1 AND id<>$2 AND aberto_em<$3',[ticket.zona_id,ticket.id,ticket.aberto_em]);
     res.json(await suggestForTicket(db,ticket,rows));
   });
   api.post('/sugestoes/:id/avaliacao',async (req,res) => {
@@ -292,7 +265,7 @@ export function createApp(db) {
     supervisor(req.user);
     const tables = [];
     for (const [name,query] of Object.entries(tableQueries)) {
-      const {rows} = await db.query('SELECT count(*)::int AS total FROM (' + query + ') scoped',[req.user.regiao]);
+      const {rows} = await db.query('SELECT count(*)::int AS total FROM (' + query + ') scoped',scopeParams(req.user));
       tables.push({nome:name,total:rows[0].total});
     }
     const version = await db.query('SELECT version() AS version');
@@ -300,16 +273,20 @@ export function createApp(db) {
   });
   api.get('/banco/export',async (req,res) => {
     supervisor(req.user);
-    res.attachment('fieldiq-' + req.user.regiao + '.sql').type('text/plain').send(await exportDomainSQL(db,req.user.regiao));
+    res.attachment('fieldiq-' + (req.user.zona_id??'geral') + '.sql').type('text/plain').send(await exportDomainSQL(db,req.user));
   });
   api.get('/banco/:table',async (req,res) => {
     supervisor(req.user);
     const query = Object.hasOwn(tableQueries,req.params.table) ? tableQueries[req.params.table] : null;
     insist(query,404,'Tabela não disponível.');
-    const {rows} = await db.query('SELECT * FROM (' + query + ') scoped ORDER BY 1 LIMIT 100',[req.user.regiao]);
+    const {rows} = await db.query('SELECT * FROM (' + query + ') scoped ORDER BY 1 LIMIT 100',scopeParams(req.user));
     const columns = await db.query('SELECT column_name,data_type,is_nullable FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2 ORDER BY ordinal_position',['fieldiq',req.params.table]);
     res.json({tabela:req.params.table,linhas:rows,colunas:columns.rows.filter(c => c.column_name !== 'senha_hash' && c.column_name !== 'foto')});
   });
+  registerUserRoutes(api,db);
+  registerAttachmentRoutes(api,db);
+  registerAttendanceRoutes(api,db);
+  registerMigrationRoutes(api,db,insertTicket);
   api.use((_req,res) => res.status(404).json({error:'Rota não encontrada.'}));
   app.get('/vendor/chart.umd.js',(_req,res) => res.sendFile(path.join(projectRoot,'node_modules/chart.js/dist/chart.umd.js')));
   app.get('/vendor/lucide.js',(_req,res) => res.sendFile(path.join(projectRoot,'node_modules/lucide/dist/umd/lucide.min.js')));
@@ -318,7 +295,7 @@ export function createApp(db) {
   app.use((error,_req,res,_next) => {
     const status = error.status ?? (error.code === '23505' ? 409 : error.code?.startsWith('23') ? 400 : 500);
     if (status === 500) console.error('Erro interno FieldIQ:',error.code ?? error.name);
-    res.status(status).json({error:status === 500 ? 'Não foi possível concluir a operação.' : error.code === '23505' ? 'Já existe um registro com este código ou número de série.' : error.code?.startsWith('23') ? 'Dados incompatíveis com as regras do banco.' : error.message});
+    res.status(status).json({error:status===413?'Arquivo ou dados acima do limite permitido.':status === 500 ? 'Não foi possível concluir a operação.' : error.code === '23505' ? 'Já existe um registro com este código, CPF, e-mail, usuário ou arquivo.' : error.code?.startsWith('23') ? 'Dados incompatíveis com as regras do banco.' : error.message});
   });
   return app;
 }

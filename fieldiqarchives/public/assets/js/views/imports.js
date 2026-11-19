@@ -1,9 +1,10 @@
-import {state} from '../core/state.js';
+import {state,isAdmin} from '../core/state.js';
 import {esc,fmtBytes,fmtDate} from '../core/format.js';
 import {icon,heading,button,badge,panelHeader,emptyState,statusBadge,notice} from '../components/ui.js';
 export function renderImports(){
   const upload=state.ui.upload;
   return heading('ENTRADA DE DADOS','Importar chamados','Traga o histórico da sua operação com identificação por equipamento.',`<a class="button button--secondary" href="/exemplo-importacao.csv" download>${icon('Download',18)}Baixar exemplo CSV</a>`)+`
+    ${isAdmin()?`<section class="panel migration-entry"><div><h2>Já utiliza outro sistema?</h2><p>Traga zonas, colaboradores, locais, elevadores e o histórico de chamados em um pacote de migração.</p></div>${button('Migrar cadastros e histórico',{action:'migration-open',name:'DatabaseBackup',tone:'secondary'})}</section>`:''}
     <div class="import-layout">
       <section class="panel">${panelHeader('Importar um arquivo','Revise uma prévia antes de enviar os registros.')}
         <div class="panel-body">

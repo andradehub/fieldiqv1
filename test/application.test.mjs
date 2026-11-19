@@ -28,7 +28,9 @@ test('sessão autenticada e dados da região; sem senhas no navegador',async()=>
   const result=await request('/bootstrap',{cookie:technician});
   assert.equal(result.status,200);
   assert.ok(result.data.chamados.length);
-  assert.ok(result.data.chamados.every(c=>c.regiao==='capital'));
+  assert.ok(result.data.chamados.every(c=>c.zona_id==='cap-04'));
+  assert.ok(result.data.pessoas.every(p=>p.zona_id==='cap-04'&&!('cpf' in p)));
+  assert.ok(result.data.zonas.every(z=>z.id==='cap-04'));
   assert.ok(result.data.pessoas.every(p=>!('senha_hash' in p)));
   assert.ok(!('senha_hash' in result.data.user));
   const rejected=await request('/chamados',{cookie:supervisor,method:'POST',origin:'https://origem-invalida.example',body:{}});
@@ -63,7 +65,7 @@ test('técnico encerra o próprio chamado com solução; SLA e histórico são c
   assert.equal(reopened.resolvido_em,null);assert.equal(reopened.sla_cumprido,null);
 });
 test('supervisor altera a própria zona e o banco impõe solução no encerramento',async()=>{
-  assert.equal((await request('/chamados/9',{cookie:supervisor,method:'PATCH',body:{revisao:1,status:'aberto'}})).status,403);
+  assert.equal((await request('/chamados/9',{cookie:supervisor,method:'PATCH',body:{revisao:1,status:'aberto'}})).status,404);
   assert.equal((await request('/chamados/5',{cookie:technician,method:'PATCH',body:{revisao:1,tecnico:'TK-CAP-002'}})).status,403);
   await assert.rejects(db.query("UPDATE chamados SET status='resolvido',resolvido_em=now(),solucao=NULL WHERE id=5"),error=>error.code==='23514');
   const rejected=await request('/chamados',{cookie:supervisor,method:'POST',body:{titulo:'Outro local',elevador_id:3}});
@@ -94,7 +96,7 @@ test('importação preserva datas, exige equipamento e relata duplicados e erros
 test('consulta e exportação mostram dados reais sem sessões ou hashes',async()=>{
   const info=await request('/banco',{cookie:supervisor});
   assert.equal(info.status,200);assert.match(info.data.version,/PostgreSQL/);
-  assert.equal(info.data.tabelas.find(t=>t.nome==='elevadores').total,4);
+  assert.equal(info.data.tabelas.find(t=>t.nome==='elevadores').total,2);
   const people=await request('/banco/pessoas',{cookie:supervisor});
   assert.ok(people.data.linhas.every(p=>!('senha_hash' in p)));
   assert.equal((await request('/banco/sessoes',{cookie:supervisor})).status,404);

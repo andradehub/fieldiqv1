@@ -1,4 +1,4 @@
-import {state,team,zoneName} from '../core/state.js';
+import {state,team,zoneName,isAdmin} from '../core/state.js';
 import {esc} from '../core/format.js';
 import {icon,heading,button,options,notice,priorityBadge,WORKS,PRIORITIES,workBadge} from '../components/ui.js';
 export function renderNewContext(){
@@ -9,18 +9,18 @@ export function renderNewContext(){
   const row=(label,value)=>`<div><span>${label}</span><strong>${value}</strong></div>`;
   return `<div class="context-card"><div class="context-card__heading">${icon('ClipboardList',19)}Contexto do atendimento</div>
     <div class="context-equipment"><span>${icon('Building2',25)}</span><div><strong>${lift?esc(lift.codigo):'Selecione um elevador'}</strong><small>${lift?esc(lift.local_nome):'O histórico acompanha o equipamento'}</small></div></div>
-    <div class="context-rows">${row('Sua zona',esc(zoneName(state.user.zona_id)))}${row('Modelo',lift?esc(lift.modelo):'—')}${row('Local',local?esc(local.bairro):'—')}${row('Responsável',person?esc(person.nome):'Ainda não atribuído')}${row('Prazo de SLA',Number(form.sla_horas)+' horas')}</div>
+    <div class="context-rows">${row('Zona do equipamento',esc(lift?zoneName(lift.zona_id):isAdmin()?'Selecione o equipamento':zoneName(state.user.zona_id)))}${row('Modelo',lift?esc(lift.modelo):'—')}${row('Local',local?esc(local.bairro):'—')}${row('Responsável',person?esc(person.nome):'Ainda não atribuído')}${row('Prazo de SLA',Number(form.sla_horas)+' horas')}</div>
     <p class="context-hint">${icon('Info',16)}A identificação correta permite consultar recorrências no mesmo elevador.</p>
   </div>`;
 }
 export function renderNewTicket(){
   const f=state.ui.newTicket;
-  const lifts=state.elevadores.filter(e=>e.zona_id===state.user.zona_id&&e.ativo);
+  const lifts=state.elevadores.filter(e=>(isAdmin()||e.zona_id===state.user.zona_id)&&e.ativo);
   const steps=['Identificação','Detalhes','Revisão'];
   let content='';
   if(f.step===1)content=`
     <div class="form-section-heading"><h2>Identifique o atendimento</h2><p>Selecione o equipamento e classifique a solicitação.</p></div>
-    <label class="field" for="nc-elevador"><span class="field__label">Elevador <em>*</em></span><span class="select-wrap"><select id="nc-elevador" name="elevador_id" data-newfield="elevador_id" required>${options({'':'Selecione o equipamento',...Object.fromEntries(lifts.map(e=>[e.id,e.codigo+' · '+e.local_nome]))},f.elevador_id)}</select>${icon('ChevronDown',16)}</span><span class="field__hint">Equipamentos cadastrados na zona da sua equipe.</span></label>
+    <label class="field" for="nc-elevador"><span class="field__label">Elevador <em>*</em></span><span class="select-wrap"><select id="nc-elevador" name="elevador_id" data-newfield="elevador_id" required>${options({'':'Selecione o equipamento',...Object.fromEntries(lifts.map(e=>[e.id,e.codigo+' · '+e.local_nome]))},f.elevador_id)}</select>${icon('ChevronDown',16)}</span><span class="field__hint">Equipamentos disponíveis para sua área de atuação.</span></label>
     <label class="field" for="nc-titulo"><span class="field__label">Título do chamado <em>*</em></span><input id="nc-titulo" name="titulo" data-newfield="titulo" required maxlength="200" value="${esc(f.titulo)}" placeholder="Ex.: Porta volta a abrir durante o fechamento"><span class="field__hint">Descreva o sintoma de forma objetiva.</span></label>
     <fieldset class="choice-field"><legend>Classificação da solicitação</legend><div class="work-choices">${Object.entries(WORKS).map(([value,label])=>`<label class="work-choice"><input type="radio" name="tipo_obra" data-newfield="tipo_obra" value="${value}" ${f.tipo_obra===value?'checked':''}>${icon(value==='obra_nova'?'Building2':value==='mod_integral'?'RefreshCw':'Wrench',20)}<span>${label}</span></label>`).join('')}</div></fieldset>
     <label class="field" for="nc-prio"><span class="field__label">Prioridade</span><span class="select-wrap"><select id="nc-prio" name="prioridade" data-newfield="prioridade">${options(PRIORITIES,f.prioridade)}</select>${icon('ChevronDown',16)}</span></label>`;
@@ -49,7 +49,7 @@ export function renderNewTicket(){
 }
 export function renderAssetDialog(tab='lift'){
   const lift=tab==='lift';
-  const locals=state.locais.filter(l=>l.zona_id===state.user.zona_id);
+  const locals=state.locais.filter(l=>isAdmin()||l.zona_id===state.user.zona_id);
   return `<div class="utility-header"><div><p class="eyebrow">CADASTRO DA EQUIPE</p><h2 id="utility-title">${lift?'Novo elevador':'Novo local'}</h2></div>${button('Fechar',{action:'close-utility',name:'X',tone:'quiet'})}</div>
     <div class="utility-tabs tabs"><button class="tab ${lift?'is-active':''}" type="button" data-action="asset-tab" data-tab="lift">Elevador</button><button class="tab ${!lift?'is-active':''}" type="button" data-action="asset-tab" data-tab="local">Local / cliente</button></div>
     <form id="asset-form" data-form="asset" data-kind="${tab}"><div class="utility-body form-stack">
@@ -61,7 +61,7 @@ export function renderAssetDialog(tab='lift'){
       <label class="field" for="local-nome"><span class="field__label">Nome do local ou cliente <em>*</em></span><input id="local-nome" name="nome" required maxlength="150" placeholder="Ex.: Condomínio Parque da Barra"></label>
       <label class="field" for="local-endereco"><span class="field__label">Endereço <em>*</em></span><input id="local-endereco" name="endereco" required maxlength="300"></label>
       <label class="field" for="local-bairro"><span class="field__label">Bairro <em>*</em></span><input id="local-bairro" name="bairro" required maxlength="100"></label>`}
-      ${notice('O cadastro será vinculado a '+zoneName(state.user.zona_id)+'.','MapPin','purple')}
+      ${isAdmin()&&!lift?`<label class="field" for="local-zone"><span class="field__label">Zona *</span><span class="select-wrap"><select id="local-zone" name="zona_id" required>${options(Object.fromEntries(state.zonas.map(z=>[z.id,z.nome+' · '+z.local])),state.zonas[0]?.id)}</select>${icon('ChevronDown',16)}</span></label>`:notice(isAdmin()?'O elevador será vinculado à zona do local selecionado.':'O cadastro será vinculado a '+zoneName(state.user.zona_id)+'.','MapPin','purple')}
       <p class="field-error" data-form-error role="alert" hidden></p>
     </div><div class="utility-footer">${button('Cancelar',{action:'close-utility'})}<button type="submit" class="button button--primary">${icon('Plus',18)}${lift?'Cadastrar elevador':'Cadastrar local'}</button></div></form>`;
 }

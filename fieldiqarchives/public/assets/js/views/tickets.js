@@ -1,6 +1,7 @@
 import {state,isSupervisor,canEdit,personName,zoneName,team} from '../core/state.js';
 import {esc,fmtDate,fmtTime,currentPeriod,dueAt} from '../core/format.js';
 import {icon,heading,button,iconButton,badge,avatar,statusBadge,priorityBadge,workBadge,slaBadge,slaCell,emptyState,panelHeader,options,STATUS,PRIORITIES,WORKS,notice} from '../components/ui.js';
+import {renderTiming,renderAttachments} from './attachments.js';
 export function filteredTickets(){
   const f=state.ui.filters;
   const normalized=s=>String(s??'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
@@ -69,6 +70,7 @@ function renderOverview(c){
     </div>
     <section class="ticket-section"><h3>Descrição do problema</h3><p class="body-copy">${esc(c.descricao||'Nenhuma descrição foi registrada para este chamado.')}</p></section>
     ${c.solucao?`<section class="solution-note"><div>${icon('CircleCheck',18)}<h3>Solução registrada</h3></div><p class="body-copy">${esc(c.solucao)}</p><span>Encerrado em ${fmtDate(c.resolvido_em)}</span></section>`:''}
+    ${renderTiming(c)}
     <section id="ai-panel">${renderAi(state.ui.ticket.ai,c)}</section>
   </div>`;
 }
@@ -93,12 +95,13 @@ function renderHistory(c){
 }
 export function renderTicketDialog(){
   const current=state.ui.ticket,c=current?.record;if(!c)return '';
-  const tabs={overview:'Visão geral',edit:'Atendimento',history:'Histórico'};
-  return `<div class="sheet-header"><div><div class="sheet-eyebrow">CHAMADO #${c.id} · ${esc(c.elevador_codigo)}</div><h2 id="ticket-title">${esc(c.titulo)}</h2><div class="sheet-tags">${statusBadge(c.status)}${priorityBadge(c.prioridade)}${slaBadge(c)}</div></div>${iconButton('X','Fechar detalhes do chamado','close-ticket')}</div>
+  const tabs={overview:'Visão geral',edit:'Atendimento',files:'Anexos'+(c.total_anexos?' ('+c.total_anexos+')':''),history:'Histórico'};
+  return `<div class="sheet-header"><div><div class="sheet-eyebrow">CHAMADO #${c.id} · ${esc(c.elevador_codigo)}</div><h2 id="ticket-title">${esc(c.titulo)}</h2><div class="sheet-tags">${statusBadge(c.status)}${priorityBadge(c.prioridade)}<span id="ticket-sla">${slaBadge(c)}</span></div></div>${iconButton('X','Fechar detalhes do chamado','close-ticket')}</div>
     <div class="sheet-tabs tabs">${Object.entries(tabs).map(([key,label])=>`<button type="button" class="tab ${current.tab===key?'is-active':''}" data-action="ticket-tab" data-tab="${key}" aria-pressed="${current.tab===key}">${label}</button>`).join('')}</div>
-    <div class="sheet-body" id="ticket-body">${current.tab==='overview'?renderOverview(c):current.tab==='edit'?renderEdit(c):renderHistory(c)}</div>
+    <div class="sheet-body" id="ticket-body">${current.tab==='overview'?renderOverview(c):current.tab==='edit'?renderEdit(c):current.tab==='files'?renderAttachments(c):renderHistory(c)}</div>
     <div class="sheet-footer"><span>${icon('CalendarDays',15)} Aberto em ${fmtDate(c.aberto_em,{dateOnly:true})}</span><div>${button('Fechar',{action:'close-ticket'})}
-    ${current.tab==='edit'&&canEdit(c)?`<button type="submit" form="ticket-edit-form" class="button button--primary" id="ticket-save">${icon('Check',18)}Salvar atendimento</button>`:canEdit(c)?button(c.status==='resolvido'?'Revisar registro':'Registrar atendimento',{action:'ticket-tab',attrs:'data-tab="edit"',tone:'primary',name:'SquarePen'}):''}</div></div>`;
+    ${canEdit(c)&&['aberto','em_andamento'].includes(c.status)?`<div class="attendance-actions">${button(c.atendimento_ativo_desde?'Pausar atendimento':c.iniciado_em?'Retomar atendimento':'Iniciar atendimento',{action:c.atendimento_ativo_desde?'attendance-pause':'attendance-start',name:c.atendimento_ativo_desde?'Pause':'Play',tone:'secondary'})}${button('Concluir atendimento',{action:'attendance-finish',name:'CircleCheck',tone:'primary'})}</div>`:''}
+    ${current.tab==='edit'&&canEdit(c)?`<button type="submit" form="ticket-edit-form" class="button button--primary" id="ticket-save">${icon('Check',18)}${current.draft.status==='resolvido'&&c.status!=='resolvido'?'Confirmar conclusão':'Salvar atendimento'}</button>`:canEdit(c)&&c.status==='resolvido'?button('Revisar registro',{action:'ticket-tab',attrs:'data-tab="edit"',tone:'secondary',name:'SquarePen'}):''}</div></div>`;
 }
 export function renderAi(ai,c){
   if(!ai)return `<div class="assistant-panel"><div class="assistant-panel__heading"><span>${icon('Sparkles',19)}Assistente de diagnóstico</span></div><div class="loading-state"><span class="spinner"></span>Analisando o histórico do elevador…</div></div>`;

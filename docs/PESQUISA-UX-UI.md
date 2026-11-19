@@ -153,4 +153,4 @@ Os eventos são delegados por atributos de ação, sem handlers JavaScript embut
 
 ## Próxima etapa funcional preservada
 
-O usuário pediu para priorizar o design antes das demais mudanças. O isolamento completo das consultas por zona permanece pendente. Esta etapa preserva os contratos e as permissões atuais do servidor; a consulta regional é identificada como tal na interface, e a zona da equipe aparece como contexto. Não se confunde um filtro visual com uma regra de autorização.
+O redesign foi seguido pela etapa funcional de 19/11/2026. As consultas agora são isoladas por zona na API para técnicos e supervisores; o Administrativo / RH tem visão geral. Gestão de usuários, anexos e registro de períodos de atendimento reutilizam o mesmo sistema visual. A pesquisa de sistemas do setor e migração está em MIGRACAO-E-SISTEMAS-DO-SETOR.md.

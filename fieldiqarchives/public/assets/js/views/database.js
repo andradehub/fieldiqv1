@@ -17,7 +17,7 @@ export function renderDatabase(){
   const rows=(data?.linhas??[]).filter(row=>!db.search||JSON.stringify(row).toLowerCase().includes(db.search.toLowerCase()));
   const columns=data?.linhas.length?Object.keys(data.linhas[0]):data?.colunas.map(c=>c.column_name)??[];
   return header+`
-    <div class="database-status"><span class="database-status__icon">${icon('Database',25)}</span><div><strong>${esc(db.info.engine)}</strong><span>Registros da sua região · consulta somente leitura</span></div>${badge('Somente leitura','purple','ShieldCheck')}</div>
+    <div class="database-status"><span class="database-status__icon">${icon('Database',25)}</span><div><strong>${esc(db.info.engine)}</strong><span>Registros da área autorizada · consulta somente leitura</span></div>${badge('Somente leitura','purple','ShieldCheck')}</div>
     <div class="database-layout">
       <aside class="panel database-catalog"><div class="database-catalog__heading"><strong>Tabelas do sistema</strong><span>${db.info.tabelas.length}</span></div><nav aria-label="Selecionar tabela">${db.info.tabelas.map(t=>`<button type="button" data-action="db-table" data-table="${t.nome}" class="database-table ${db.table===t.nome?'is-active':''}" aria-pressed="${db.table===t.nome}">${icon('Table2',17)}<span>${esc(t.nome)}</span><small>${t.total}</small></button>`).join('')}</nav></aside>
       <section class="panel database-records">${panelHeader(db.table,'Até 100 registros por consulta',badge('Dados persistidos','green','HardDrive'))}

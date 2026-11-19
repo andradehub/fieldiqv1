@@ -1,14 +1,14 @@
 # FieldIQ — chamados de elevadores com histórico e recorrência
 
-Dashboard para técnicos e supervisores: chamados, locais, equipamentos, indicadores operacionais, equipes e assistência baseada em atendimentos anteriores.
+Dashboard para técnicos, supervisores e Administrativo / RH: chamados, locais, equipamentos, indicadores operacionais, equipes e assistência baseada em atendimentos anteriores.
 
 ## Interface e pesquisa de UX/UI
 
-O redesign preserva o roxo e o laranja e reorganiza as oito áreas da aplicação. Inclui fonte Inter local, ícones Lucide, tabelas adaptadas para cartões, paginação, formulários em etapas e detalhes do chamado em abas.
+O redesign preserva o roxo e o laranja e reorganiza as nove áreas da aplicação. Inclui fonte Inter local, ícones Lucide, tabelas adaptadas para cartões, paginação, formulários em etapas e detalhes do chamado em abas.
 
 A pesquisa documental e as decisões de indicadores, navegação e responsividade estão em [docs/PESQUISA-UX-UI.md](docs/PESQUISA-UX-UI.md). O frontend está separado em core, components e views; os estilos em tokens, layout, components e views.
 
-A consulta continua seguindo as permissões atuais da API. O isolamento completo de consultas por zona foi reservado para a próxima etapa funcional.
+As consultas são isoladas por zona na API: técnicos e supervisores acessam a própria zona. O Administrativo / RH tem visão de todas as zonas. A pesquisa de migração está em [docs/MIGRACAO-E-SISTEMAS-DO-SETOR.md](docs/MIGRACAO-E-SISTEMAS-DO-SETOR.md).
 
 ## Executar no computador
 
@@ -21,7 +21,7 @@ npm start
 
 Abra http://127.0.0.1:4173. No Windows, também é possível executar `INICIAR-FIELDIQ.cmd` na pasta do repositório.
 
-Na primeira execução são criados dez zonas, nove colaboradores, cinco locais, seis elevadores e dezessete chamados fictícios. As datas são relativas à primeira inicialização. As execuções seguintes preservam os registros e as alterações.
+Na primeira execução são criados dez zonas, dez colaboradores, cinco locais, seis elevadores e dezessete chamados fictícios. As datas são relativas à primeira inicialização. As execuções seguintes preservam os registros e as alterações.
 
 | Perfil | Login local | Senha local |
 | --- | --- | --- |
@@ -29,6 +29,7 @@ Na primeira execução são criados dez zonas, nove colaboradores, cinco locais,
 | Supervisor — Barra da Tijuca | supervisor.capital | tk2026 |
 | Técnico — Niterói | tecnico.interior | tk2026 |
 | Supervisor — Niterói | supervisor.interior | tk2026 |
+| Administrativo / RH — todas as zonas | administrativo | tk2026 |
 
 Os acessos rápidos são exclusivos da demonstração local. Em PostgreSQL remoto, defina sua própria `DEMO_PASSWORD` e informe-a no formulário de login.
 
@@ -38,14 +39,14 @@ O modo local usa **PostgreSQL compilado para WebAssembly (PGlite)** no servidor 
 
 O mesmo esquema e as consultas podem usar um serviço PostgreSQL convencional por `DATABASE_URL`, incluindo um PostgreSQL hospedado no Supabase. Não são usados Supabase Auth, SDK ou tabelas do antigo exemplo.
 
-- Esquema: `database/001-schema.sql`, dentro do schema PostgreSQL `fieldiq`.
+- Esquema: `database/001-schema.sql` e `database/002-operacao.sql`, dentro do schema PostgreSQL `fieldiq`.
 - Relacionamento central: `zonas → locais → elevadores → chamados → historico_chamados`.
 - Pessoas se relacionam com zona, responsabilidade pelos chamados e autoria das alterações.
 - Senhas possuem hash scrypt; sessões usam token aleatório com apenas o hash no banco.
 - Alterações e eventos de histórico são gravados na mesma transação.
 - Métricas de tempo e SLA vêm da view `vw_chamados_metricas`.
 
-O supervisor pode abrir **Banco de Dados** para consultar tabelas, colunas e SQL, além de exportar os registros da própria região. Essa consulta não permite SQL arbitrário, não mostra senhas/sessões e não substitui um backup completo.
+O supervisor pode abrir **Banco de Dados** para consultar tabelas, colunas e SQL, além de exportar os registros da própria zona. Essa consulta não permite SQL arbitrário, não mostra senhas/sessões, CPF ou contatos pessoais e não substitui um backup completo. Anexos binários não fazem parte da exportação de domínio. O Administrativo consulta todas as zonas.
 
 O PGlite local deve ser aberto por **um processo por vez**. A aplicação usa uma trava de processo. Encerre o servidor antes de rodar `npm run db:export`; com o servidor aberto, use a exportação da interface. O modo local é voltado à apresentação e ao desenvolvimento; uma publicação com múltiplas instâncias deve usar PostgreSQL remoto.
 
@@ -69,17 +70,37 @@ Depois execute `npm run db:init` e `npm start`. O banco estará disponível para
 
 ## Permissões
 
-| Ação | Técnico | Supervisor |
-| --- | --- | --- |
-| Consultar chamados/equipamentos | Própria região | Própria região |
-| Editar descrição e solução | Chamado atribuído a ele | Chamado da própria zona |
-| Iniciar e encerrar atendimento | Chamado atribuído a ele | Chamado da própria zona |
-| Criar, atribuir, reabrir e cancelar | Não | Própria zona |
-| Cadastrar local/elevador e importar | Não | Própria zona |
-| Administrar equipe | Não | Própria zona, com proteção de pendências |
-| Consultar tabelas/exportar SQL | Não | Dados da própria região |
+| Ação | Técnico | Supervisor | Administrativo / RH |
+| --- | --- | --- | --- |
+| Consultar chamados/equipamentos | Própria zona | Própria zona | Todas as zonas |
+| Editar, iniciar, pausar e concluir | Chamado atribuído a ele | Própria zona | Todas as zonas |
+| Criar, atribuir, reabrir e cancelar | Não | Própria zona | Todas as zonas |
+| Anexar fotos/documentos | Próprios chamados | Própria zona | Todas as zonas |
+| Cadastrar local/elevador e importar chamados | Não | Própria zona | Todas as zonas |
+| Cadastrar/editar técnicos | Não | Própria zona, sem transferir | Todas as zonas |
+| Cadastrar/editar supervisores e transferir zonas | Não | Não | Sim |
+| Consultar tabelas/exportar SQL | Não | Própria zona | Todas as zonas |
+| Migrar cadastros e histórico de outro sistema | Não | Não | Sim |
 
-O servidor verifica essas regras em cada operação. Encerramento exige solução registrada; apenas o supervisor reabre um chamado. Revisões impedem que uma gravação antiga sobrescreva outra alteração. Cancelados são excluídos dos denominadores dos indicadores de resolução.
+O servidor verifica as regras em cada operação. Encerramento exige solução; a gestão pode reabrir. Revisões impedem gravações concorrentes de versões antigas. Transferir ou desativar um técnico exige reatribuir os chamados pendentes. Mudanças de senha, perfil, zona ou desativação revogam sessões do usuário afetado.
+
+### Cadastro de colaboradores
+
+A Gestão de usuários inclui nome completo, matrícula, perfil, zona, cargo, CPF, e-mail comercial, telefone, admissão, usuário, senha e situação ativo/inativo. O CPF é validado por dígitos verificadores e aparece mascarado na listagem. Não há consulta de regularidade na Receita. Contatos e CPF não são enviados no catálogo operacional compartilhado com técnicos. Novas senhas têm no mínimo 12 caracteres e são armazenadas com scrypt. O primeiro perfil Administrativo é criado pelo comando de configuração; não há promoção para esse perfil na tela de cadastro.
+
+### Horários, SLA e indicadores
+
+- Iniciar/retomar cria um período de trabalho com horário do servidor e grava o primeiro início. Pausar encerra o período ativo. Concluir grava a solução, fecha qualquer período ativo e registra o encerramento.
+- SLA de resolução: prazo em horas corridas desde a abertura. Pausas não suspendem o prazo; reabrir não altera a abertura nem concede prazo novo.
+- Tempo de resolução: encerramento menos abertura. A média considera chamados resolvidos no recorte de abertura escolhido no painel.
+- Trabalho registrado: soma dos períodos iniciados e encerrados, excluindo pausas. É mostrado no detalhe, separado do tempo de resolução.
+- SLA cumprido: resolvidos dentro do prazo dividido pelo total de resolvidos no recorte. Pendentes vencidos aparecem no contador de atrasos.
+- Taxa de resolução: resolvidos dividido pelos chamados não cancelados no mesmo recorte. Cancelados não entram nesse denominador.
+- Após ações, os dados são recarregados do banco. O painel e as listagens em repouso se atualizam a cada 30 segundos; os contadores do detalhe avançam a cada segundo. Formulários em edição não são substituídos automaticamente.
+
+### Fotos e documentos
+
+A aba Anexos aceita JPG/JPEG, PNG, WebP, PDF, TXT, CSV, DOCX e XLSX. Limites: 2 MB por arquivo; 20 arquivos e 20 MB por chamado. O servidor verifica conteúdo e extensão, permissões, duplicidade e tamanho. Fotos têm miniatura; documentos são baixados. Arquivos são persistidos como bytea no PostgreSQL e não ficam disponíveis como caminhos públicos. Inclusão e exclusão ficam no histórico com autoria. O técnico responsável exclui apenas os anexos que enviou; a gestão pode excluir os anexos do seu escopo. A IA continua usando o texto dos chamados e das soluções, sem leitura automática dos anexos.
 
 ## Assistente de diagnóstico
 
@@ -87,7 +108,7 @@ O caso demonstrativo principal é o chamado **#5**, no elevador **BAR-001**, no 
 
 A análise local:
 
-1. Recupera atendimentos anteriores da mesma região, excluindo o próprio chamado e registros posteriores à sua abertura.
+1. Recupera atendimentos anteriores da mesma zona, excluindo o próprio chamado e registros posteriores à sua abertura.
 2. Calcula similaridade textual com TF-IDF e cosseno, complementada por termos de componentes.
 3. Prioriza o mesmo elevador e distingue evidências de outros equipamentos.
 4. Apresenta recorrências, intervalo entre ocorrências, soluções registradas e links para os atendimentos usados.
@@ -116,7 +137,9 @@ JSON, CSV/TXT e Excel. O leitor Excel utiliza o CDN já presente na interface; s
 
 Obrigatórios: `titulo` e `elevador_codigo`, com o equipamento previamente cadastrado. Para registros resolvidos, são obrigatórios `solucao` e `resolvido_em`; informe também `aberto_em` para preservar o histórico. Use datas ISO 8601, com fuso, como `2026-11-01T10:00:00-03:00`.
 
-O código do elevador e o técnico devem pertencer à zona do supervisor. O sistema relata linhas inválidas e duplicadas. Limites: 500 linhas e 2 MB no arquivo da interface. Existe um exemplo para download na tela de importação.
+O código do elevador e o técnico devem pertencer à mesma zona, dentro do escopo do usuário. O sistema relata linhas inválidas e duplicadas. Limites: 500 linhas e 2 MB no arquivo da interface. Existe um exemplo para download na tela de importação.
+
+A migração completa preserva cadastros relacionados e datas originais em uma transação. O Administrativo seleciona **Migrar cadastros e histórico**, valida um pacote JSON e confirma a importação. O exemplo completo é fictício. Para CSVs de várias tabelas, há conversor com mapeamento de colunas e valores. Consulte [o guia de migração e a pesquisa do setor](docs/MIGRACAO-E-SISTEMAS-DO-SETOR.md).
 
 ## Publicar novamente
 
@@ -126,8 +149,8 @@ Para Vercel:
 
 1. Selecione a **raiz do repositório**, com framework **Other**. O comando `npm run build` prepara a interface em `public/`.
 2. Configure `DATABASE_URL` de um PostgreSQL hospedado com conexão TLS válida. Não use o PGlite em disco efêmero de função serverless. Se o provedor oferecer pool de conexões compatível, use o endereço recomendado por ele.
-3. Para demonstração fictícia, configure `DEMO_MODE=1` e uma `DEMO_PASSWORD` própria. As tabelas e os dados serão inicializados somente se a tabela de pessoas estiver vazia.
-4. Para uma base sem demonstração, use `DEMO_MODE=0`. Crie o primeiro supervisor com `npm run admin:create` em ambiente apontado ao mesmo banco, configurando `ADMIN_LOGIN`, `ADMIN_NAME`, `ADMIN_PASSWORD` (12+ caracteres), `ADMIN_REGION`, `ADMIN_ZONE` e, opcionalmente, `ADMIN_ZONE_NAME`.
+3. Para demonstração fictícia, configure `DEMO_MODE=1` e uma `DEMO_PASSWORD` própria. Os dados iniciais são criados se a tabela de pessoas estiver vazia; a conta Administrativo da demonstração também é acrescentada na atualização de uma base demonstrativa anterior. Migrações de esquema preservam os registros existentes.
+4. Para uma base sem demonstração, use `DEMO_MODE=0`. Crie o primeiro Administrativo com `npm run admin:create` em ambiente apontado ao mesmo banco, configurando `ADMIN_LOGIN`, `ADMIN_NAME`, `ADMIN_PASSWORD` (12 a 200 caracteres) e, opcionalmente, `ADMIN_REGISTRATION`. Cadastre zonas pelo pacote de migração antes de cadastrar colaboradores em uma base nova.
 5. Publique e valide login, abertura e encerramento de um chamado e persistência após recarregar. A variante remota e o deploy não foram executados nesta implementação local.
 
 As variáveis ficam no ambiente do servidor. Não coloque credenciais em HTML, no Git ou em arquivos de build. O schema `fieldiq` é acessado pela API do servidor, que aplica a autorização; não conceda acesso direto de escrita a visitantes.
@@ -139,10 +162,11 @@ npm run check
 npm test
 npm run build
 npm run test:browser
+node test/browser-operations.mjs
 ```
 
-Os testes de API verificam autenticação, regiões, atribuição, encerramento, SLA, concorrência, evidências, importação, exportação e persistência após fechar/reabrir o banco. Os testes de geração usam respostas simuladas: nenhuma chave nem chamada externa é necessária.
+Os testes de API verificam autenticação, zonas, papéis, cadastro, atribuição, encerramento, SLA, concorrência, evidências, importação, exportação e persistência após fechar/reabrir o banco. Os testes de geração usam respostas simuladas: nenhuma chave nem chamada externa é necessária.
 
-A suíte de interface usa Edge/Chromium, oito larguras entre 320 e 1440 px e treze verificações axe. WebKit é usado quando instalado para verificar a engine em dimensões de iPhone. Isso não substitui teste em aparelho físico nem certificação integral de acessibilidade. Capturas e relatórios ficam em test-results/redesign.
+A suíte de interface usa Edge/Chromium, oito larguras entre 320 e 1440 px e dezessete verificações axe. WebKit é usado quando instalado para verificar a engine em dimensões de iPhone. Isso não substitui teste em aparelho físico nem certificação integral de acessibilidade. Os fluxos novos também são testados em 320, 390 e 834 px, incluindo WebKit, com verificações de acessibilidade nos formulários, anexos, migração e atendimento. Capturas e relatórios ficam em test-results/redesign e test-results/operations.
 
 Para apresentar o projeto, veja [docs/APRESENTACAO-TCC.md](docs/APRESENTACAO-TCC.md).
