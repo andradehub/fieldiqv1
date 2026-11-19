@@ -1,0 +1,5 @@
+.fieldiq/
+test/
+test-results/
+.env*
+!.env.example

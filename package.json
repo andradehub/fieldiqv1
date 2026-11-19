@@ -1,0 +1,25 @@
+{
+  "name": "fieldiq",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node --env-file-if-exists=.env server/index.mjs",
+    "dev": "node --env-file-if-exists=.env --watch server/index.mjs",
+    "test": "node --test --test-concurrency=1 test/*.test.mjs",
+    "db:init": "node --env-file-if-exists=.env scripts/database.mjs init",
+    "db:export": "node --env-file-if-exists=.env scripts/database.mjs export",
+    "admin:create": "node --env-file-if-exists=.env scripts/create-admin.mjs",
+    "test:browser": "node test/browser.mjs",
+    "check": "node --check server/app.mjs && node --check server/ai.mjs && node --check fieldiqarchives/public/assets/js/app.js"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.16",
+    "chart.js": "4.4.1",
+    "express": "5.3.0",
+    "pg": "8.23.1"
+  },
+  "devDependencies": { "playwright": "1.65.1" }
+}

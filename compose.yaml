@@ -1,0 +1,20 @@
+# Opcional: PostgreSQL convencional para demonstrar com psql, pgAdmin ou DBeaver.
+# Credenciais ficticias de desenvolvimento; porta acessivel apenas neste computador.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: fieldiq
+      POSTGRES_USER: fieldiq
+      POSTGRES_PASSWORD: fieldiq_local_tcc
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - fieldiq_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fieldiq -d fieldiq"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  fieldiq_postgres:
