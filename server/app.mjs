@@ -312,6 +312,8 @@ export function createApp(db) {
   });
   api.use((_req,res) => res.status(404).json({error:'Rota não encontrada.'}));
   app.get('/vendor/chart.umd.js',(_req,res) => res.sendFile(path.join(projectRoot,'node_modules/chart.js/dist/chart.umd.js')));
+  app.get('/vendor/lucide.js',(_req,res) => res.sendFile(path.join(projectRoot,'node_modules/lucide/dist/umd/lucide.min.js')));
+  app.use('/assets/fonts',express.static(path.join(projectRoot,'node_modules/@fontsource-variable/inter/files')));
   app.use(express.static(path.join(projectRoot,'fieldiqarchives/public')));
   app.use((error,_req,res,_next) => {
     const status = error.status ?? (error.code === '23505' ? 409 : error.code?.startsWith('23') ? 400 : 500);

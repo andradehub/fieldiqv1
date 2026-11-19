@@ -44,7 +44,7 @@ Também existem importações e sessões. A relação do técnico com o chamado 
 4. Em **Banco de Dados**, selecione elevadores, chamados e histórico. Mostre as chaves estrangeiras no SQL e exporte os dados da região.
 5. Saia e entre como **tecnico.capital**. Abra o chamado **#5** e mostre as quatro ocorrências anteriores de BAR-001.
 6. Expanda as evidências e abra um dos chamados anteriores. Explique a diferença entre um fato documentado e uma hipótese para o atendimento atual.
-7. Volte ao #5, registre uma solução fictícia, selecione **Resolvido** e salve.
+7. Volte ao #5, abra a aba **Atendimento**, registre uma solução fictícia, selecione **Resolvido** e salve. A aba **Histórico** mostra as alterações e sua autoria.
 8. Recarregue a página: a sessão, a solução e o histórico permanecem.
 9. Mostre um chamado atribuído a outro técnico: o formulário de alteração não aparece. A API também bloqueia a tentativa, mesmo que alguém modifique o HTML.
 10. Entre como técnico do Interior: os chamados da Capital não são retornados pelo servidor.

@@ -1,242 +1,35 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FieldIQ — TK Elevator</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet">
-<script src="/vendor/chart.umd.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<link rel="stylesheet" href="assets/css/style.css">
-<link rel="stylesheet" href="assets/css/database.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#5b0a8a">
+  <meta name="description" content="FieldIQ — Gestão de chamados, equipes e histórico de elevadores.">
+  <title>FieldIQ · Gestão de atendimentos</title>
+  <link rel="preload" href="/assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/assets/css/tokens.css">
+  <link rel="stylesheet" href="/assets/css/layout.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/views.css">
 </head>
-<body class="no-flex">
-
-<!-- ===== LOGIN ===== -->
-<div class="login-wrap" id="login-wrap">
-  <div class="login-box">
-    <div class="login-logo"><div class="logo-mk">FQ</div><span class="logo-tx" style="font-family:'Syne',sans-serif;font-weight:700">FieldIQ - USJ</span></div>
-    <p class="login-sub">TK Elevator — Sistema de Monitoramento</p>
-    <div class="login-err" id="login-err">Usuário ou senha inválidos.</div>
-    <div id="demo-access"><div class="login-section-label">Acesso rápido · dados fictícios do TCC</div>
-    <div class="login-cards">
-      <button class="login-card" onclick="loginRapido('tecnico.capital')"><span class="lc-role"><span class="lc-dot" style="background:var(--purple)"></span>Técnico</span><span class="lc-reg">Capital — Zona 04 Barra da Tijuca</span></button>
-      <button class="login-card" onclick="loginRapido('tecnico.interior')"><span class="lc-role"><span class="lc-dot" style="background:var(--purple)"></span>Técnico</span><span class="lc-reg">Interior — Zona 01 Niterói</span></button>
-      <button class="login-card" onclick="loginRapido('supervisor.capital')"><span class="lc-role"><span class="lc-dot" style="background:var(--orange)"></span>Supervisor</span><span class="lc-reg">Capital — Zona 04 Barra da Tijuca</span></button>
-      <button class="login-card" onclick="loginRapido('supervisor.interior')"><span class="lc-role"><span class="lc-dot" style="background:var(--orange)"></span>Supervisor</span><span class="lc-reg">Interior — Zona 01 Niterói</span></button>
+<body>
+  <div id="login-root"></div>
+  <div id="app-shell" hidden>
+    <a class="skip-link" href="#main">Pular para o conteúdo</a>
+    <aside class="sidebar" id="sidebar" aria-label="Navegação principal"></aside>
+    <button class="nav-backdrop" id="nav-backdrop" aria-label="Fechar menu" tabindex="-1" data-action="close-menu"></button>
+    <div class="app-main">
+      <header class="topbar" id="topbar"></header>
+      <main class="workspace" id="main" tabindex="-1"><div id="app-view"></div></main>
     </div>
-    </div><div class="login-divider">entre com usuário e senha</div>
-    <div class="fg"><label class="flabel">Usuário</label><input type="text" class="fi" id="login-user" placeholder="ex: tecnico.capital"></div>
-    <div class="fg"><label class="flabel">Senha</label><input type="password" class="fi" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')fazerLogin()"></div>
-    <button id="login-submit" class="btn-p" style="width:100%;justify-content:center;margin-top:.5rem" onclick="fazerLogin()">Entrar</button>
-    <p id="demo-password" style="font-size:13px;color:var(--t3);text-align:center;margin-top:1.25rem">Senha local para todos os logins de demonstração: <strong>tk2026</strong></p>
+    <nav class="bottom-nav" id="bottom-nav" aria-label="Navegação no celular"></nav>
   </div>
-</div>
-
-<!-- ===== APP ===== -->
-<div class="app-shell" id="app-shell">
-
-<div class="mtb">
-  <div class="mtb-left"><div class="logo-mk">FQ</div><span class="logo-tx">FieldIQ</span></div>
-  <button class="mtb-burger" onclick="toggleSidebar()" aria-label="Menu"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
-</div>
-<div class="sb-overlay" id="sb-overlay" onclick="toggleSidebar()"></div>
-
-<div class="sb" id="sidebar">
-  <div class="sb-logo"><div class="logo-mk">FQ</div><span class="logo-tx">FieldIQ</span></div>
-  <nav class="sb-nav">
-    <button class="ni active" id="nav-dash" onclick="navTo('dashboard')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Dashboard</button>
-    <button class="ni" id="nav-cham" onclick="navTo('chamados')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>Chamados</button>
-    <button class="ni" id="nav-novo" onclick="navTo('novochamado')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>Novo Chamado</button>
-    <button class="ni" id="nav-imp" onclick="navTo('importacao')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Importar Dados</button>
-    <button class="ni" id="nav-tec" onclick="navTo('tecnicos')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>Técnicos</button>
-    <button class="ni" id="nav-elevadores" onclick="navTo('elevadores')"><span aria-hidden="true">▤</span>Elevadores e Locais</button>
-    <button class="ni" id="nav-banco" onclick="navTo('banco')"><span aria-hidden="true">▦</span>Banco de Dados</button>
-  </nav>
-  <div class="sb-emp">
-    <button class="sb-user-box" onclick="navTo('perfil')" title="Ver meu perfil">
-      <div class="emp-av" id="user-avatar">TK</div>
-      <div><div class="emp-nm" id="user-nome">—</div><div class="emp-pf" id="user-perfil">—</div></div>
-    </button>
-    <div style="display:flex;justify-content:flex-end;margin-top:8px">
-      <button class="sb-logout" onclick="logout()" title="Sair"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
-    </div>
-  </div>
-</div>
-
-<main class="main">
-
-<!-- DASHBOARD -->
-<div class="page active" id="page-dashboard">
-  <div class="ph"><div><h1 class="pt">Dashboard</h1><p class="ps" id="dash-sub">Visão geral de desempenho operacional</p></div><button class="btn-g" onclick="atualizarDados()">Atualizar dados</button></div>
-  <div class="kpi-g" id="kpi-g"></div>
-  <div class="cr">
-    <div class="cc"><div class="ch"><h3 class="ct">Chamados por semana de abertura</h3></div><div style="position:relative;height:220px"><canvas id="ch-tend"></canvas></div></div>
-    <div class="cc"><div class="ch"><h3 class="ct">Classificação de obra</h3></div><div id="leg-tipos" class="cl"></div><div style="position:relative;height:180px"><canvas id="ch-tipo"></canvas></div></div>
-  </div>
-  <div class="sc"><div class="ch"><h3 class="ct">Desempenho por Zona</h3></div><div id="tb-reg"></div></div>
-  <div class="sc" id="rank-box"><div class="ch"><h3 class="ct">Ranking de Técnicos</h3></div><div id="rank"></div></div>
-</div>
-
-<!-- CHAMADOS -->
-<div class="page" id="page-chamados">
-  <div class="ph">
-    <div><h1 class="pt">Chamados</h1><p class="ps" id="cham-total">0 chamados</p></div>
-    <button class="btn-p" id="btn-novo-cham" onclick="navTo('novochamado')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Novo Chamado</button>
-  </div>
-  <div class="fb">
-    <input type="text" class="fi" id="f-busca" placeholder="Buscar chamado, elevador ou local..." oninput="filtrarChamados()">
-    <select class="fsel" id="f-status" onchange="filtrarChamados()"><option value="">Todos os status</option><option value="aberto">Aberto</option><option value="em_andamento">Em andamento</option><option value="resolvido">Resolvido</option><option value="cancelado">Cancelado</option></select>
-    <select class="fsel" id="f-obra" onchange="filtrarChamados()"><option value="">Todas as classificações</option><option value="obra_nova">Obra Nova</option><option value="mod_integral">Modificação Integral</option><option value="mod_parcial">Modificação Parcial</option></select>
-  </div>
-  <div class="sc" style="margin-bottom:0"><div class="table-responsive"><table class="ft"><thead><tr><th>#</th><th>Título</th><th>Classificação</th><th>Zona</th><th>Prioridade</th><th>Status</th><th>Técnico</th><th>Aberto em</th><th>SLA</th><th></th></tr></thead><tbody id="tb-cham"></tbody></table></div></div>
-</div>
-
-<!-- NOVO CHAMADO -->
-<div class="page" id="page-novochamado">
-  <div class="ph"><div><h1 class="pt">Novo Chamado</h1><p class="ps">Apenas supervisores podem registrar chamados</p></div><button class="btn-g" onclick="navTo('chamados')">← Voltar</button></div>
-  <div id="nc-block-msg" style="display:none" class="a-block">Apenas supervisores podem criar chamados.</div>
-  <div class="fc" id="nc-form-wrap">
-    <div class="fcard">
-      <div class="fsteps">
-        <div class="step active" id="sd1"><div class="sn">1</div><div class="sl">Identificação</div></div><div class="sline"></div>
-        <div class="step" id="sd2"><div class="sn">2</div><div class="sl">Detalhes</div></div><div class="sline"></div>
-        <div class="step" id="sd3"><div class="sn">3</div><div class="sl">Confirmação</div></div>
-      </div>
-      <div class="fstep" id="fs1">
-        <h3 class="stitle">Identificação do chamado</h3>
-        <div class="fg"><label class="flabel">Título <span class="req">*</span></label><input type="text" class="fi" id="nc-titulo" placeholder="Ex: Instalação de elevador — Torre B" maxlength="200"><span class="fhint">Seja objetivo — ajuda a detectar recorrências automaticamente</span></div>
-        <div class="fg"><label class="flabel" for="nc-elevador">Elevador <span class="req">*</span></label><select class="fi" id="nc-elevador" required></select><span class="fhint">O histórico acompanha este equipamento, mesmo quando o técnico responsável muda.</span></div>
-        <div class="frow">
-          <div class="fg"><label class="flabel">Classificação <span class="req">*</span></label><select class="fi" id="nc-tipo"><option value="obra_nova">Obra Nova</option><option value="mod_integral">Modificação Integral</option><option value="mod_parcial">Modificação Parcial</option></select></div>
-          <div class="fg"><label class="flabel">Prioridade <span class="req">*</span></label><select class="fi" id="nc-prio"><option value="baixa">Baixa</option><option value="media" selected>Média</option><option value="alta">Alta</option><option value="critica">Crítica</option></select></div>
-        </div>
-        <div class="fg"><label class="flabel">Zona</label><input type="text" class="fi" id="nc-zona" disabled><span class="fhint">A zona é definida automaticamente pela sua zona de supervisão</span></div>
-        <div class="fg"><label class="flabel">SLA (horas)</label><input type="number" class="fi" id="nc-sla" value="24" min="1" max="8760" style="max-width:160px"></div>
-        <div class="sa"><button class="btn-p" onclick="ncPasso(2)">Próximo →</button></div>
-      </div>
-      <div class="fstep hidden" id="fs2">
-        <h3 class="stitle">Detalhes do chamado</h3>
-        <div class="fg"><label class="flabel">Descrição detalhada</label><textarea class="fi" id="nc-desc" rows="4" placeholder="Descreva o problema do elevador: sintomas, frequência, quando começou..."></textarea></div>
-        <div class="fg"><label class="flabel">Técnico responsável (da sua equipe)</label><select class="fi" id="nc-tec"><option value="">A definir</option></select></div>
-        <div class="sa"><button class="btn-g" onclick="ncPasso(1)">← Voltar</button><button class="btn-p" onclick="ncPasso(3)">Próximo →</button></div>
-      </div>
-      <div class="fstep hidden" id="fs3">
-        <h3 class="stitle">Confirmar e abrir chamado</h3>
-        <div class="rcard" id="nc-resumo"></div>
-        <div id="nc-alerta" aria-live="polite"></div>
-        <div class="sa"><button class="btn-g" onclick="ncPasso(2)">← Voltar</button><button class="btn-p" id="btn-abrir" onclick="abrirChamado_novo()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Abrir Chamado</button></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- IMPORTAÇÃO -->
-<div class="page" id="page-importacao">
-  <div class="ph"><div><h1 class="pt">Importar Dados</h1><p class="ps">Carregue chamados de elevadores a partir de arquivos externos</p></div></div>
-  <div id="imp-block-msg" style="display:none" class="a-block">Apenas supervisores podem importar dados.</div>
-  <div id="imp-wrap">
-    <div class="fmg">
-      <div class="fmc"><div class="fmi" style="background:#217346">XLS</div><div class="fmn">Excel</div><div class="fme">.xlsx / .xls</div></div>
-      <div class="fmc"><div class="fmi" style="background:#0066cc">CSV</div><div class="fmn">CSV</div><div class="fme">.csv / .txt</div></div>
-      <div class="fmc"><div class="fmi" style="background:#f59e0b">JSON</div><div class="fmn">JSON</div><div class="fme">.json</div></div>
-      <div class="fmc"><div class="fmi" style="background:#8b5cf6">SQL</div><div class="fmn">Histórico persistente</div><div class="fme">Identificação por elevador</div></div>
-    </div>
-    <div class="sc">
-      <h3 class="ct" style="margin-bottom:1.25rem">Enviar arquivo</h3>
-      <div class="uz" id="uz" ondragover="event.preventDefault();this.classList.add('dv')" ondragleave="this.classList.remove('dv')" ondrop="impDrop(event)">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="uic"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        <p class="ut">Arraste seu arquivo aqui ou</p>
-        <label class="btn-p" style="cursor:pointer">Escolher arquivo<input type="file" id="f-inp" accept=".xlsx,.xls,.csv,.json,.txt" hidden onchange="impSel(this)"></label>
-        <p class="uh">Aceitos: .xlsx · .csv · .json · .txt — obrigatórios: titulo e elevador_codigo. Para resolvidos: solucao e resolvido_em. <a href="/exemplo-importacao.csv" download>Baixar exemplo CSV</a></p>
-      </div>
-      <div id="f-prev" style="display:none;margin-top:1rem">
-        <div class="fi2"><div class="fiw" id="f-ico">XLS</div><div><div class="fn" id="f-nome">arquivo.xlsx</div><div class="fsz" id="f-tam">0 KB</div></div><button class="btn-g" style="margin-left:auto" onclick="impRem()">Remover</button></div>
-        <button id="import-submit" class="btn-p" style="width:100%;margin-top:.75rem;justify-content:center" onclick="impExec()">Importar agora</button>
-      </div>
-      <div id="imp-prog" style="display:none;margin-top:1rem"><div class="ip"><div class="ipb" id="ipb" style="width:0"></div></div><p class="is" id="ips">Processando...</p></div>
-      <div id="imp-res" style="display:none;margin-top:1rem"></div>
-    </div>
-    <div class="sc"><div class="ch"><h3 class="ct">Histórico de importações</h3></div><div id="imp-hist"></div></div>
-  </div>
-</div>
-
-<!-- TÉCNICOS -->
-<div class="page" id="page-tecnicos">
-  <div class="ph"><div><h1 class="pt">Técnicos</h1><p class="ps" id="tec-sub">Equipe de campo</p></div></div>
-  <div id="team-box-wrap"></div>
-  <div class="sc"><div class="ch"><h3 class="ct" id="tec-list-title">Técnicos</h3></div><div id="tb-tec"></div></div>
-</div>
-
-<!-- ELEVADORES E LOCAIS -->
-<div class="page" id="page-elevadores">
-  <div class="ph"><div><h1 class="pt">Elevadores e Locais</h1><p class="ps">Cada equipamento tem sua identificação e histórico de atendimentos.</p></div></div>
-  <div class="sc" id="lift-list"></div>
-  <div class="asset-grid" id="asset-forms">
-    <form class="sc" onsubmit="salvarLocal(event)">
-      <h2 class="ct">Cadastrar local na minha zona</h2>
-      <div class="fg"><label class="flabel" for="local-nome">Nome do prédio ou cliente</label><input class="fi" id="local-nome" required maxlength="150"></div>
-      <div class="fg"><label class="flabel" for="local-endereco">Endereço</label><input class="fi" id="local-endereco" required maxlength="300"></div>
-      <div class="fg"><label class="flabel" for="local-bairro">Bairro</label><input class="fi" id="local-bairro" required maxlength="100"></div>
-      <button class="btn-p" type="submit">Cadastrar local</button>
-    </form>
-    <form class="sc" onsubmit="salvarElevador(event)">
-      <h2 class="ct">Cadastrar elevador</h2>
-      <div class="frow">
-        <div class="fg"><label class="flabel" for="lift-codigo">Código único</label><input class="fi" id="lift-codigo" required maxlength="40" pattern="[A-Za-z0-9_-]+" placeholder="Ex.: BAR-003"></div>
-        <div class="fg"><label class="flabel" for="lift-local">Local</label><select class="fi" id="lift-local" required></select></div>
-      </div>
-      <div class="frow">
-        <div class="fg"><label class="flabel" for="lift-fabricante">Fabricante</label><input class="fi" id="lift-fabricante" required maxlength="100"></div>
-        <div class="fg"><label class="flabel" for="lift-modelo">Modelo</label><input class="fi" id="lift-modelo" required maxlength="100"></div>
-      </div>
-      <div class="frow">
-        <div class="fg"><label class="flabel" for="lift-serie">Número de série</label><input class="fi" id="lift-serie" required maxlength="100"></div>
-        <div class="fg"><label class="flabel" for="lift-capacidade">Capacidade (kg)</label><input class="fi" id="lift-capacidade" type="number" min="100" max="5000" required value="750"></div>
-      </div>
-      <button class="btn-p" type="submit">Cadastrar elevador</button>
-    </form>
-  </div>
-</div>
-
-<!-- BANCO DE DADOS: consulta para supervisores e apresentação do TCC -->
-<div class="page" id="page-banco">
-  <div class="ph"><div><h1 class="pt">Banco de Dados</h1><p class="ps">Tabelas e relacionamentos do sistema · consulta da sua região</p></div><a class="btn-p" href="/api/banco/export" download>Exportar SQL</a></div>
-  <div class="sc"><p id="db-summary" class="db-engine"></p><p class="fhint">Consulta somente leitura. Senhas e sessões não são exibidas. A exportação contém os dados de domínio, sem credenciais.</p><div class="db-tables" id="db-tables"></div></div>
-  <div class="sc"><h2 class="ct" id="db-table-title">Registros</h2><div class="table-responsive" id="db-rows"></div><details><summary>Estrutura das colunas</summary><pre id="db-columns"></pre></details></div>
-  <div class="sc"><details><summary>Ver esquema SQL e relacionamentos</summary><pre id="db-schema"></pre></details></div>
-</div>
-
-<!-- PERFIL -->
-<div class="page" id="page-perfil">
-  <div class="ph"><div><h1 class="pt">Meu Perfil</h1><p class="ps">Informações do colaborador</p></div></div>
-  <div class="sc">
-    <div class="profile-hero">
-      <div class="profile-av-wrap">
-        <div class="profile-av" id="profile-av">TK</div>
-        <label class="profile-av-edit" title="Alterar foto"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><input type="file" accept="image/*" hidden onchange="trocarFoto(this)"></label>
-      </div>
-      <div>
-        <div class="profile-name" id="profile-nome">—</div>
-        <div class="profile-mat" id="profile-mat">—</div>
-        <div class="profile-badges" id="profile-badges"></div>
-      </div>
-    </div>
-    <div class="profile-grid">
-      <div class="rcard"><div class="rrow"><span class="rk">Cargo</span><span class="rv" id="profile-cargo">—</span></div><div class="rrow"><span class="rk">Zona</span><span class="rv" id="profile-zona">—</span></div><div class="rrow"><span class="rk">Região</span><span class="rv" id="profile-regiao">—</span></div></div>
-      <div class="rcard"><div class="rrow"><span class="rk">Perfil de acesso</span><span class="rv" id="profile-role">—</span></div><div class="rrow"><span class="rk">Chamados (real)</span><span class="rv" id="profile-chamados">—</span></div><div class="rrow"><span class="rk">Taxa de resolução</span><span class="rv" id="profile-taxa">—</span></div></div>
-    </div>
-  </div>
-</div>
-
-</main>
-</div><!-- /app-shell -->
-
-<div class="overlay" id="modal-ov" onclick="if(event.target===this)fecharModal()">
-  <div class="modal"><div class="mh"><span class="mht" id="modal-t">Detalhe</span><button class="mc" onclick="fecharModal()">✕</button></div><div class="mb" id="modal-b"></div></div>
-</div>
-<div class="toast" id="toast"></div>
-
-<script src="assets/js/app.js"></script>
+  <dialog id="ticket-dialog" class="sheet" aria-labelledby="ticket-title"></dialog>
+  <dialog id="utility-dialog" class="utility-dialog" aria-labelledby="utility-title"></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/vendor/lucide.js"></script>
+  <script src="/vendor/chart.umd.js"></script>
+  <script async src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script type="module" src="/assets/js/app.js"></script>
 </body>
 </html>

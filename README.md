@@ -2,6 +2,14 @@
 
 Dashboard para técnicos e supervisores: chamados, locais, equipamentos, indicadores operacionais, equipes e assistência baseada em atendimentos anteriores.
 
+## Interface e pesquisa de UX/UI
+
+O redesign preserva o roxo e o laranja e reorganiza as oito áreas da aplicação. Inclui fonte Inter local, ícones Lucide, tabelas adaptadas para cartões, paginação, formulários em etapas e detalhes do chamado em abas.
+
+A pesquisa documental e as decisões de indicadores, navegação e responsividade estão em [docs/PESQUISA-UX-UI.md](docs/PESQUISA-UX-UI.md). O frontend está separado em core, components e views; os estilos em tokens, layout, components e views.
+
+A consulta continua seguindo as permissões atuais da API. O isolamento completo de consultas por zona foi reservado para a próxima etapa funcional.
+
 ## Executar no computador
 
 Requisito: Node.js 22 ou superior.
@@ -133,6 +141,8 @@ npm run build
 npm run test:browser
 ```
 
-Os testes de API verificam autenticação, regiões, atribuição, encerramento, SLA, concorrência, evidências, importação, exportação e persistência após fechar/reabrir o banco. Os testes de geração usam respostas simuladas: nenhuma chave nem chamada externa é necessária. O teste de navegador usa o Microsoft Edge instalado no Windows e cobre os fluxos principais e viewport de celular.
+Os testes de API verificam autenticação, regiões, atribuição, encerramento, SLA, concorrência, evidências, importação, exportação e persistência após fechar/reabrir o banco. Os testes de geração usam respostas simuladas: nenhuma chave nem chamada externa é necessária.
+
+A suíte de interface usa Edge/Chromium, oito larguras entre 320 e 1440 px e treze verificações axe. WebKit é usado quando instalado para verificar a engine em dimensões de iPhone. Isso não substitui teste em aparelho físico nem certificação integral de acessibilidade. Capturas e relatórios ficam em test-results/redesign.
 
 Para apresentar o projeto, veja [docs/APRESENTACAO-TCC.md](docs/APRESENTACAO-TCC.md).
