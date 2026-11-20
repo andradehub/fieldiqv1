@@ -40,11 +40,25 @@ export function normalizeRow(raw){
   if(result.tipo_obra)result.tipo_obra=({modificacao_integral:'mod_integral',modificacao_parcial:'mod_parcial'})[result.tipo_obra]??result.tipo_obra;
   return result;
 }
+function migrationPackage(value){
+  if(value?.formato!=='fieldiq-legado-v1')throw new Error('Use uma lista de chamados ou um pacote completo no modelo fieldiq-legado-v1.');
+  return value;
+}
+export async function readMigration(file){
+  if(file.size>2000000)throw new Error('Selecione um JSON de até 2 MB.');
+  return migrationPackage(JSON.parse((await file.text()).replace(/^\uFEFF/,'')));
+}
 export async function readImport(file){
   if(file.size>2000000)throw new Error('Selecione um arquivo de até 2 MB.');
   const format=file.name.split('.').pop().toLowerCase();
   let rows;
-  if(format==='json'){const value=JSON.parse(await file.text());rows=Array.isArray(value)?value:[value];}
+  if(format==='json'){
+    const value=JSON.parse((await file.text()).replace(/^\uFEFF/,''));
+    if(value&&typeof value==='object'&&!Array.isArray(value)&&'formato' in value){
+      return {kind:'migration',file,format,pack:migrationPackage(value)};
+    }
+    rows=Array.isArray(value)?value:[value];
+  }
   else if(['csv','txt'].includes(format))rows=parseCSV(await file.text());
   else if(['xlsx','xls'].includes(format)){
     if(!window.XLSX)throw new Error('O leitor Excel ainda não está disponível. Tente novamente com conexão à internet ou utilize CSV/JSON.');
@@ -52,5 +66,10 @@ export async function readImport(file){
     rows=window.XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]]);
   }else throw new Error('Use um arquivo CSV, TXT, JSON, XLS ou XLSX.');
   if(!rows.length||rows.length>500)throw new Error('O arquivo deve conter entre 1 e 500 linhas.');
-  return {file,format,rows:rows.map(normalizeRow),reading:false,error:null,result:null};
+  const normalized=rows.map((row,index)=>{
+    const result=normalizeRow(row);
+    if(!Object.keys(result).length)throw new Error('Linha '+(index+1)+': nenhum campo de chamado reconhecido. Use as colunas do exemplo ou um pacote completo no modelo fieldiq-legado-v1.');
+    return result;
+  });
+  return {kind:'tickets',file,format,rows:normalized,reading:false,error:null,result:null};
 }

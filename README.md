@@ -91,6 +91,7 @@ O IP pode mudar ao reconectar a rede; confira o endereço exibido em cada inicia
 | `node test/browser-operations.mjs` | Verificar operações e filtros em celular/tablet. |
 | `node test/browser-followups.mjs` | Verificar rascunhos, cargos, imagens, migração, portal e triagem. |
 | `node test/browser-team.mjs` | Verificar colaboração entre contas, conflito de edição, assumir e liberar. |
+| `node test/browser-import.mjs` | Verificar reconhecimento da base completa no campo comum, permissões, confirmação e reenvio em desktop/celular. |
 | `node scripts/generate-demo.mjs` | Regenerar o arquivo fictício completo, com avatares ilustrados. |
 | `node scripts/convert-legacy.mjs ...` | Converter CSVs relacionados para um pacote de migração. |
 
@@ -324,6 +325,8 @@ Disponível à gestão no próprio escopo. Aceita CSV/TXT, JSON e Excel, com **a
 - Resultado e histórico de importações ficam disponíveis na tela.
 - CSV reconhece vírgula, ponto e vírgula, tabulação e barra vertical, respeitando campos entre aspas.
 - Excel usa a biblioteca carregada por CDN; sem ela, use CSV ou JSON.
+- Um JSON de chamados pode ser uma lista de objetos ou um único chamado. Objetos sem campos reconhecidos são rejeitados antes de mostrar uma prévia vazia.
+- Ao selecionar um pacote `fieldiq-legado-v1` neste mesmo campo, o Administrativo é encaminhado à prévia de migração completa. O supervisor recebe uma orientação para usar o perfil Administrativo / RH, sem enviar o pacote como um chamado.
 
 | Campo | Regra |
 | --- | --- |
@@ -373,6 +376,8 @@ Arquivos para baixar:
 - [Base fictícia completa](fieldiqarchives/public/demonstracao-fieldiq.json).
 
 A base completa tem **10 zonas, 40 colaboradores, 20 locais, 40 elevadores, 160 chamados, 280 registros de histórico, 40 participações adicionais e 160 períodos de trabalho**. Inclui dados sintéticos e **avatares ilustrados gerados localmente**, não retratos de pessoas reais. Ela reutiliza as zonas iniciais e usa identificadores próprios para coexistir com a base demonstrativa. Não é importada automaticamente.
+
+Para usar `demonstracao-fieldiq.json`, entre como **Administrativo / RH**, abra **Importar dados** e selecione o arquivo no campo comum ou em **Migrar cadastros e histórico**. Confira as quantidades, clique em **Validar pacote** e depois em **Importar cadastros e histórico**. Apenas selecionar ou validar não grava a base. Se o arquivo aparecer como “1 registro” sem título/elevador, recarregue a página para obter a correção do reconhecimento de formato. Contas importadas permanecem inativas até definição de senha e ativação pela gestão.
 
 Para converter CSVs relacionados:
 
@@ -617,7 +622,7 @@ npm test
 npm run build
 ```
 
-A última verificação funcional registrada passou em **39 arquivos JavaScript e 29 testes automatizados**, além do build. Os testes cobrem autenticação, autorização por zona/perfil, cargos, clientes, equipes, desatribuição, anexos, SLA, métricas, importação, migração, conversor CSV, exportação e persistência/atualização de banco.
+A última verificação funcional registrada passou em **39 arquivos JavaScript e 33 testes automatizados**, além do build. Os testes cobrem autenticação, autorização por zona/perfil, cargos, clientes, equipes, desatribuição, anexos, SLA, métricas, reconhecimento de arquivos, importação, migração, conversor CSV, exportação e persistência/atualização de banco.
 
 ### Interface
 
@@ -639,6 +644,8 @@ O script de geração de avatares também usa o Edge por meio do Playwright; nã
 Cobertura registrada: dez telas internas em larguras de 320, 375, 390, 430, 768, 834, 1024 e 1440 px; WebKit em dimensões de iPhone; fluxos de cadastro, rascunho, cargos, visualização/zoom, migração completa, cliente/triagem, colaboração entre contas e assumir/liberar.
 
 Foram concluídas **17 verificações axe gerais, 20 operacionais e 21 dos novos fluxos**, sem violações detectadas nos cenários avaliados. Isso não substitui uso em aparelho físico nem certificação integral de acessibilidade.
+
+A correção de reconhecimento da base fictícia acrescentou **9 verificações axe** no Edge/WebKit, em 320, 390 e 1440 px: entrada comum, prévia completa e orientação por perfil. O teste importa os 160 chamados somente em banco isolado, confirma que selecionar/validar não grava, verifica reenvio sem duplicação e mantém a importação de chamados para supervisores.
 
 Capturas e relatórios são gerados em `test-results/redesign`, `test-results/operations` e `test-results/followups`, fora do Git. A interface móvel usa cartões, cinco chamados por página, navegação inferior, filtros completos em grade e abas reorganizadas. No computador, são dez chamados por página.
 

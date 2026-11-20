@@ -2,6 +2,14 @@
 
 Este histórico registra o problema que motivou cada entrega e seu efeito na aplicação. Os commits publicados mantêm seus identificadores; as explicações abaixo complementam suas mensagens.
 
+## 2026-11-20 — reconhecimento da base fictícia na importação
+
+**Motivo:** selecionar `demonstracao-fieldiq.json` no campo comum convertia o pacote inteiro em um único chamado vazio, mostrando “Título não informado” e equipamento ausente. O fluxo de migração existia em uma entrada separada e não era descoberto pelo reconhecimento do arquivo.
+
+**Alterações:** o campo comum identifica o formato `fieldiq-legado-v1` e abre a prévia completa para o Administrativo, com as quantidades reais de cadastros. Supervisores recebem orientação sobre o perfil necessário, sem tratar o pacote como chamado nem ampliar permissões. JSONs incompatíveis são rejeitados na leitura; listas e chamados individuais continuam aceitos. A tela destaca a base completa, mantém validação e confirmação explícitas e dá nome acessível ao botão de remover arquivo no celular. Reenvios já importados mostram quantidades como criadas, sem sugerir nova criação.
+
+**Verificação:** 39 arquivos JavaScript, build e 33 testes automatizados aprovados. Teste específico no Edge/WebKit em 320, 390 e 1440 px, com 9 verificações axe sem violações: seleção pelo campo comum, validação sem gravação, confirmação com 160 chamados, reenvio sem duplicação, bloqueio orientado para supervisor e prévia de chamados simples. Toda importação de teste usou banco isolado em memória; a base do usuário não foi importada automaticamente. O servidor local já entrega os arquivos atualizados; o navegador precisa recarregar a página.
+
 ## 2026-11-20 — acesso pela rede local no Windows
 
 **Motivo:** o responsável pediu acesso para outras pessoas na mesma rede. O servidor padrão escuta apenas em `127.0.0.1`, endereço que não aceita conexões de outros aparelhos.

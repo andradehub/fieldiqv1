@@ -1,7 +1,7 @@
 import {state,routes,isSupervisor,isAdmin,acceptData,canEdit} from './core/state.js';
 import {api} from './core/api.js';
 import {esc} from './core/format.js';
-import {readImport} from './core/import.js';
+import {readImport,readMigration} from './core/import.js';
 import {icon,button,slaBadge,options} from './components/ui.js';
 import {jobTitles} from './core/jobs.js';
 import {renderLogin,renderSidebar,renderTopbar,renderBottomNav} from './views/shell.js';
@@ -265,12 +265,24 @@ function quickFilter(value){
   if(value==='unassigned'){f.flag='unassigned';f.status='pending';}
   navigate('chamados');
 }
+function openMigration(migration=null){
+  state.ui.migration=migration;$('utility-dialog').innerHTML=renderMigrationDialog();state.ui.utility={kind:'migration'};$('utility-dialog').showModal();
+}
 async function chooseFile(file){
   if(!file)return;
   const pending={file,reading:true,rows:null};
   state.ui.upload=pending;
   renderView();
-  try{const result=await readImport(file);if(state.ui.upload!==pending)return;state.ui.upload=result;}
+  try{
+    const result=await readImport(file);if(state.ui.upload!==pending)return;
+    if(result.kind==='migration'){
+      if(!isAdmin())throw new Error('Este arquivo é uma base completa com cadastros e histórico de várias zonas. Entre com o perfil Administrativo / RH para importá-lo. Supervisores podem importar somente chamados da própria zona.');
+      state.ui.upload=null;
+      if(state.ui.route==='importacao'){renderView();openMigration({file,pack:result.pack,result:null});}
+      return;
+    }
+    state.ui.upload=result;
+  }
   catch(error){if(state.ui.upload!==pending)return;state.ui.upload={file,reading:false,error:error.message};}
   if(state.ui.route==='importacao')renderView();
 }
@@ -314,7 +326,7 @@ document.addEventListener('click',event=>{
     dialog.dataset.zoom=String(zoom);picture.style.width=zoom===1?'':picture.naturalWidth*zoom+'px';picture.classList.toggle('is-zoomed',zoom>1);$('image-zoom-value').textContent=Math.round(zoom*100)+'%';return;
   }
   if(action==='migration-open'){
-    state.ui.migration=null;$('utility-dialog').innerHTML=renderMigrationDialog();state.ui.utility={kind:'migration'};$('utility-dialog').showModal();return;
+    openMigration();return;
   }
   if(action==='request-review'){
     const request=state.solicitacoes.find(s=>s.id===Number(target.dataset.id));if(!request)return;
@@ -493,9 +505,7 @@ document.addEventListener('change',event=>{
   if(target.dataset.change==='user-role'||target.dataset.change==='user-zone'){state.ui.users??={};state.ui.users[target.dataset.change==='user-role'?'role':'zone']=target.value;renderView(true);}
   if(target.dataset.change==='migration-file')void execute(null,'migration-file',async()=>{
     const file=target.files[0];if(!file)return;
-    if(file.size>2000000)throw new Error('Selecione um JSON de até 2 MB.');
-    const pack=JSON.parse(await file.text());
-    if(pack.formato!=='fieldiq-legado-v1')throw new Error('Use o modelo de migração disponível para download.');
+    const pack=await readMigration(file);
     state.ui.migration={file,pack,result:null};$('migration-content').innerHTML=renderMigration();
   });
   if(target.dataset.change==='profile-photo')void execute(null,'profile-photo',()=>changePhoto(target.files[0]));
