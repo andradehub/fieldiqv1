@@ -117,9 +117,9 @@ try{
   await page.keyboard.press('Escape');
   await navigate(page,'importacao');
   await page.locator('#import-file').setInputFiles({name:'quoted.csv',mimeType:'text/csv',buffer:Buffer.from('titulo,elevador_codigo,descricao\n"Teste, com vírgula",BAR-001,"Descrição em duas\nlinhas"\n')});
-  await page.locator('#import-submit').waitFor();await screenshot(page,'desktop-importacao-previa');
+  await page.locator('#import-validate').click();await page.locator('#import-submit').waitFor();await screenshot(page,'desktop-importacao-previa');
   await page.locator('#import-submit').click();
-  await page.locator('#import-result').filter({hasText:'1 registro(s) importado(s)'}).waitFor();
+  await page.locator('#import-result').filter({hasText:'1 chamado(s) importado(s)'}).waitFor();
   await navigate(page,'banco');await page.locator('.database-data tbody tr').first().waitFor();
   const exported=await page.request.get(base+'/api/banco/export');
   assert.equal(exported.status(),200);assert.match(await exported.text(),/INSERT INTO chamados/);
@@ -155,9 +155,9 @@ try{
   const resolvedCall=(await db.query('SELECT * FROM vw_chamados_metricas WHERE id=$1',[callId])).rows[0];assert.equal(resolvedCall.sla_cumprido,false);assert.ok(resolvedCall.iniciado_em&&resolvedCall.resolvido_em);
   await page.locator('#sidebar [data-action="logout"]').click();await page.locator('[data-login="administrativo"]').click();await page.locator('#page-title').waitFor();
   await navigate(page,'usuarios');await page.locator('[data-action="user-open"]').first().click();assert.equal(await page.locator('#user-zone').isDisabled(),false);assert.equal(await page.locator('#user-role option').count(),3);await axe(page,'cadastro administrativo');await page.keyboard.press('Escape');
-  await navigate(page,'importacao');await page.locator('[data-action="migration-open"]').click();await page.locator('#migration-file').setInputFiles(path.join(projectRoot,'fieldiqarchives/public/exemplo-migracao.json'));
-  await page.locator('[data-action="migration-validate"]').click();await page.locator('[data-action="migration-confirm"]').waitFor();await axe(page,'validação de migração');await screenshot(page,'desktop-migracao');
-  await page.locator('[data-action="migration-confirm"]').click();await page.locator('#migration-content').filter({hasText:'Migração concluída'}).waitFor();await page.keyboard.press('Escape');
+  await navigate(page,'importacao');await page.locator('#import-file').setInputFiles(path.join(projectRoot,'fieldiqarchives/public/exemplo-migracao.json'));
+  await page.locator('#import-validate').click();await page.locator('#import-submit').waitFor();await axe(page,'validação de migração');await screenshot(page,'desktop-migracao');
+  await page.locator('#import-submit').click();await page.locator('#import-result').filter({hasText:'Importação concluída'}).waitFor();await page.keyboard.press('Escape');
   await navigate(page,'usuarios');await page.locator('#user-search').fill('LEG-100');await page.locator('.users-panel tbody').filter({hasText:'Inativo'}).waitFor();
   await context.close();
 

@@ -84,6 +84,24 @@ test('recorrência usa evidências anteriores e prioriza o mesmo elevador na reg
   assert.equal((await request('/sugestoes/'+result.data.id+'/avaliacao',{cookie:technician,method:'POST',body:{util:true}})).status,200);
   assert.equal((await db.query('SELECT util FROM avaliacoes_ia WHERE sugestao_id=$1',[result.data.id])).rows[0].util,true);
 });
+test('prévia de chamados valida duplicados e erros sem gravar chamados, histórico ou importação',async()=>{
+  const row={elevador_codigo:'BAR-002',titulo:'Prévia sem gravação',aberto_em:'2026-02-01T12:00:00Z'};
+  const body={nome:'previa.json',formato:'json',linhas:[row,row,{titulo:'Sem equipamento'}],confirmar:false};
+  const counts=async()=>Promise.all(['chamados','historico_chamados','importacoes'].map(async table=>(await db.query('SELECT count(*) AS total FROM '+table)).rows[0].total));
+  const before=await counts();
+  const result=await request('/importacoes/validar',{cookie:supervisor,method:'POST',body:{...body,confirmar:true}});
+  assert.equal(result.status,200,JSON.stringify(result.data));
+  assert.equal(result.data.validado,true);assert.equal(result.data.validas,1);assert.equal(result.data.importadas,0);
+  assert.equal(result.data.duplicadas,1);assert.equal(result.data.erros,2);assert.deepEqual(await counts(),before);
+  assert.equal((await request('/importacoes/validar',{cookie:technician,method:'POST',body})).status,403);
+  const foreign=await request('/importacoes',{cookie:supervisor,method:'POST',body:{...body,linhas:[{...row,elevador_codigo:'NIT-001'}]}});
+  assert.equal(foreign.data.validas,0);assert.deepEqual(await counts(),before);
+  const confirmed=await request('/importacoes',{cookie:supervisor,method:'POST',body:{...body,confirmar:true}});
+  assert.equal(confirmed.data.importadas,1);assert.equal(confirmed.data.duplicadas,1);
+  const again=await request('/importacoes',{cookie:supervisor,method:'POST',body});
+  assert.equal(again.data.validas,0);assert.equal(again.data.duplicadas,2);
+});
+
 test('importação preserva datas, exige equipamento e relata duplicados e erros',async()=>{
   const data={elevador_codigo:'BAR-002',titulo:'Registro importado para teste',descricao:'Iluminação intermitente',status:'resolvido',solucao:'Correção fictícia registrada.',aberto_em:'2026-01-01T12:00:00Z',resolvido_em:'2026-01-01T13:00:00Z'};
   const result=await request('/importacoes',{cookie:supervisor,method:'POST',body:{nome:'teste.csv',formato:'csv',linhas:[data,data,{titulo:'Sem equipamento'}]}});

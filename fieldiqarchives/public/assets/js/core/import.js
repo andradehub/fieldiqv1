@@ -1,3 +1,4 @@
+import {IMPORT_GROUPS} from './import-preview.js';
 export function parseCSV(input){
   const text=input.replace(/^\uFEFF/,'');
   const first=text.split(/\r?\n/)[0];
@@ -42,6 +43,14 @@ export function normalizeRow(raw){
 }
 function migrationPackage(value){
   if(value?.formato!=='fieldiq-legado-v1')throw new Error('Use uma lista de chamados ou um pacote completo no modelo fieldiq-legado-v1.');
+  const groups=Object.keys(IMPORT_GROUPS);
+  if(!Object.keys(value).every(key=>['formato','origem',...groups].includes(key)))throw new Error('A base contém campos não reconhecidos. Use o modelo de exemplo.');
+  let total=0;
+  for(const key of groups){
+    if(value[key]!==undefined&&!Array.isArray(value[key]))throw new Error(IMPORT_GROUPS[key]+': informe uma lista de registros.');
+    total+=(value[key]??[]).length;
+  }
+  if(!total||total>1000)throw new Error('Uma base completa deve conter entre 1 e 1.000 registros no total.');
   return value;
 }
 export async function readMigration(file){

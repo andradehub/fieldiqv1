@@ -2,6 +2,14 @@
 
 Este histórico registra o problema que motivou cada entrega e seu efeito na aplicação. Os commits publicados mantêm seus identificadores; as explicações abaixo complementam suas mensagens.
 
+## 2026-11-20 — importação unificada com revisão dos registros
+
+**Motivo:** “Importar uma base completa” e “Importar um arquivo” levavam ao mesmo resultado para o JSON de demonstração, mas sugeriam operações distintas. O responsável pediu uma única área e a possibilidade de conferir o conteúdo incluído antes de gravar.
+
+**Alterações:** um campo de seleção/arraste identifica chamados ou uma base completa e mantém toda a revisão no painel. Removido o formulário separado de migração. Resumo de categorias, fotos incorporadas, referências identificadas por nome/código, campos dos registros, categorias expansíveis, busca sem acentos e paginação de cinco registros. O fluxo é selecionar → conferir/validar → confirmar. A validação de chamados usa transação com pontos de recuperação por linha e reversão final, detectando duplicados/erros sem gravar domínio ou histórico de importação. A confirmação revalida e preserva o tratamento por linha; a base completa permanece atômica. Supervisores continuam limitados à zona; bases completas exigem Administrativo. Requisições concorrentes pelo botão são impedidas e erros ficam no painel. Exemplos continuam disponíveis para download.
+
+**Verificação:** 40 arquivos JavaScript, build e 37 testes automatizados aprovados. Teste dedicado no Edge/WebKit em 320, 390 e 1440 px, com 15 verificações axe sem violações nos cenários finais, cobrindo entrada única, fotos, busca, paginação, validação sem gravação, confirmação, duplicados e orientação de supervisor. Testes de importação usaram banco separado em memória. Scripts de navegador anteriores foram adaptados ao novo fluxo. Após cópia local de segurança e reinicialização do servidor, a revisão e validação também foram conferidas no endereço da rede, preservando os 17 chamados e as zero importações da base em uso. A rota exclusiva de validação sempre simula, mesmo com sinalização de confirmação; um servidor antigo a rejeita sem gravar. Não foi feita importação automática na base em uso.
+
 ## 2026-11-20 — reconhecimento da base fictícia na importação
 
 **Motivo:** selecionar `demonstracao-fieldiq.json` no campo comum convertia o pacote inteiro em um único chamado vazio, mostrando “Título não informado” e equipamento ausente. O fluxo de migração existia em uma entrada separada e não era descoberto pelo reconhecimento do arquivo.

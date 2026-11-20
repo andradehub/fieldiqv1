@@ -91,7 +91,7 @@ O IP pode mudar ao reconectar a rede; confira o endereço exibido em cada inicia
 | `node test/browser-operations.mjs` | Verificar operações e filtros em celular/tablet. |
 | `node test/browser-followups.mjs` | Verificar rascunhos, cargos, imagens, migração, portal e triagem. |
 | `node test/browser-team.mjs` | Verificar colaboração entre contas, conflito de edição, assumir e liberar. |
-| `node test/browser-import.mjs` | Verificar reconhecimento da base completa no campo comum, permissões, confirmação e reenvio em desktop/celular. |
+| `node test/browser-import.mjs` | Verificar entrada única, prévia por categoria, fotos, busca, paginação, validação sem gravação, permissões e confirmação em desktop/celular. |
 | `node scripts/generate-demo.mjs` | Regenerar o arquivo fictício completo, com avatares ilustrados. |
 | `node scripts/convert-legacy.mjs ...` | Converter CSVs relacionados para um pacote de migração. |
 
@@ -157,7 +157,7 @@ As dez áreas internas são exibidas conforme o perfil. O cliente usa outra inte
 | **Equipe de campo** | Colaboradores, cargos, zona, foto e situação; pendências, resolução e tempo médio individual; consulta dos chamados em que a pessoa é responsável ou participante. |
 | **Gestão de usuários** | Cadastro e edição, cargos por perfil, contatos, admissão, acesso, ativação/desativação, zonas e vínculos de cliente; rascunhos de formulário na sessão. |
 | **Solicitações de clientes** | Caixa de entrada da área autorizada; relato, equipamento, cliente, abertura e lembretes; aceite com atribuição/prazo/prioridade ou retorno justificado; acesso ao chamado gerado. |
-| **Importar dados** | Importação de chamados com prévia e relatório por linha; exemplos para download; histórico de importações; migração completa para Administrativo, com validação e confirmação. |
+| **Importar dados** | Entrada única para chamados e bases completas, com identificação automática; resumo por categoria, fotos, busca e paginação dos registros; validação sem gravação, relatório de duplicados/erros e confirmação; exemplos para download e histórico de arquivos de chamados. |
 | **Banco de dados** | Catálogo permitido, quantidades, consulta de até 100 registros por tabela, busca nos registros exibidos, estrutura de colunas, esquema SQL, versão do banco e exportação de domínio. |
 | **Meu perfil** | Informações profissionais, cargo, matrícula, zona e resumo de atuação; alteração de foto em PNG, JPEG ou WebP, de até 1,4 MB na interface. |
 
@@ -315,18 +315,30 @@ Os testes do provedor usam respostas simuladas; nenhuma chamada paga foi necess�
 
 ## Importação e migração de dados
 
+### Uma única entrada e revisão do conteúdo
+
+Em **Importar dados**, use o mesmo campo para selecionar ou arrastar qualquer arquivo aceito. A tela identifica chamados ou uma base completa e apresenta a revisão no próprio painel, sem um segundo formulário de migração.
+
+1. **Selecionar arquivo:** CSV/TXT, Excel ou JSON de até 2 MB. Há uma seção recolhível para baixar os exemplos, inclusive a base fictícia com fotos para o Administrativo.
+2. **Conferir e validar:** o resumo mostra as categorias incluídas e suas quantidades. Expanda zonas, pessoas e fotos, locais, elevadores, chamados, histórico, equipes e períodos. Cada categoria tem busca sem distinção de acentos e paginação de cinco registros. São exibidos os campos recebidos, com referências identificadas por nome/código e miniaturas de fotos incorporadas válidas. A prévia não busca fotos em URLs externas.
+3. **Confirmar importação:** clique em **Validar arquivo** para conferir novos registros, cadastros reutilizados, duplicados e erros antes de habilitar **Confirmar importação**. Selecionar e validar não grava registros de domínio nem histórico de importação. A confirmação revalida os dados; mudanças concorrentes podem alterar o resultado final.
+
+Um supervisor pode revisar/importar apenas chamados do próprio escopo. Bases completas exigem Administrativo / RH; reconhecer o formato não amplia permissões. Remover o arquivo limpa a prévia. Durante uma requisição de importação, aguarde o término antes de remover ou trocar o arquivo.
+
 ### Importar chamados
 
 Disponível à gestão no próprio escopo. Aceita CSV/TXT, JSON e Excel, com **até 2 MB e 500 linhas por arquivo**.
 
-- Prévia das primeiras linhas antes do envio.
+- Prévia de todos os registros por busca e paginação antes do envio.
 - Validação por linha, relatório de erros e identificação de duplicados.
 - Linhas válidas são gravadas com seu histórico; linhas inválidas são relatadas.
 - Resultado e histórico de importações ficam disponíveis na tela.
 - CSV reconhece vírgula, ponto e vírgula, tabulação e barra vertical, respeitando campos entre aspas.
 - Excel usa a biblioteca carregada por CDN; sem ela, use CSV ou JSON.
 - Um JSON de chamados pode ser uma lista de objetos ou um único chamado. Objetos sem campos reconhecidos são rejeitados antes de mostrar uma prévia vazia.
-- Ao selecionar um pacote `fieldiq-legado-v1` neste mesmo campo, o Administrativo é encaminhado à prévia de migração completa. O supervisor recebe uma orientação para usar o perfil Administrativo / RH, sem enviar o pacote como um chamado.
+- Ao selecionar um pacote `fieldiq-legado-v1`, o Administrativo vê a prévia completa no mesmo painel. O supervisor recebe uma orientação para usar o perfil Administrativo / RH, sem enviar o pacote como um chamado.
+- A validação de chamados simula a gravação em uma transação com pontos de recuperação por linha e a reverte ao final. Assim detecta duplicados no banco e dentro do arquivo, sem gravar chamados, histórico ou arquivo importado. Sequências PostgreSQL podem consumir números durante essa simulação.
+- Se houver linhas válidas e inválidas, a tela informa quais serão ignoradas. A confirmação importa somente as válidas. Sem linhas válidas, não habilita a confirmação.
 
 | Campo | Regra |
 | --- | --- |
@@ -358,7 +370,7 @@ Exclusivo do Administrativo. Aceita um JSON no modelo `fieldiq-legado-v1`, com *
 | `equipes` | Participações adicionais por chamado. |
 | `atendimentos` | Períodos históricos encerrados, com início, fim e técnico. |
 
-Cada registro possui um ID da origem. As referências são traduzidas para os IDs locais. O fluxo **Validar pacote → Conferir quantidades → Importar** revalida os dados e grava o pacote inteiro em uma transação.
+Cada registro possui um ID da origem. As referências são traduzidas para os IDs locais. O fluxo **Conferir conteúdo → Validar arquivo → Confirmar importação** revalida os dados e grava o pacote inteiro em uma transação.
 
 - A validação reverte os registros ao final; sequências PostgreSQL podem consumir números sem criar chamados.
 - Um erro impede a gravação do pacote completo e informa entidade/posição.
@@ -377,7 +389,7 @@ Arquivos para baixar:
 
 A base completa tem **10 zonas, 40 colaboradores, 20 locais, 40 elevadores, 160 chamados, 280 registros de histórico, 40 participações adicionais e 160 períodos de trabalho**. Inclui dados sintéticos e **avatares ilustrados gerados localmente**, não retratos de pessoas reais. Ela reutiliza as zonas iniciais e usa identificadores próprios para coexistir com a base demonstrativa. Não é importada automaticamente.
 
-Para usar `demonstracao-fieldiq.json`, entre como **Administrativo / RH**, abra **Importar dados** e selecione o arquivo no campo comum ou em **Migrar cadastros e histórico**. Confira as quantidades, clique em **Validar pacote** e depois em **Importar cadastros e histórico**. Apenas selecionar ou validar não grava a base. Se o arquivo aparecer como “1 registro” sem título/elevador, recarregue a página para obter a correção do reconhecimento de formato. Contas importadas permanecem inativas até definição de senha e ativação pela gestão.
+Para usar `demonstracao-fieldiq.json`, entre como **Administrativo / RH**, abra **Importar dados** e selecione o arquivo no campo único. Confira as quantidades e expanda as categorias para revisar nomes, fotos e dados dos registros. Clique em **Validar arquivo** e depois em **Confirmar importação**. Apenas selecionar ou validar não grava a base. Se o arquivo aparecer como “1 registro” sem título/elevador, recarregue a página para obter a versão atual. Contas importadas permanecem inativas até definição de senha e ativação pela gestão.
 
 Para converter CSVs relacionados:
 
@@ -591,7 +603,8 @@ A rota antiga `POST /equipe` não deve ser usada para transferências. Ela bloqu
 | `DELETE /anexos/:id` | Excluir anexo permitido, com histórico. |
 | `POST /chamados/:id/sugestao` | Recuperar evidências e gerar análise de recorrência. |
 | `POST /sugestoes/:id/avaliacao` | Registrar `util: true` ou `false`. |
-| `POST /importacoes` | Importar linhas de chamados e registrar o resultado. |
+| `POST /importacoes` | Receber linhas de chamados: `confirmar: false` valida sem gravar; `true` importa e registra o resultado. Resposta informa duplicados e erros. Clientes antigos que omitem `confirmar` mantêm o envio direto. |
+| `POST /importacoes/validar` | Rota usada pela nova tela para validar chamados. Nunca confirma a gravação, mesmo se receber `confirmar: true`; servidor antigo responde rota inexistente em vez de importar silenciosamente. |
 | `GET /migracoes` | Histórico das migrações completas, para Administrativo. |
 | `POST /migracoes` | Receber `pacote` e `confirmar: false` para prévia ou `true` para gravação. |
 | `GET /banco` | Catálogo e informações do banco. |
@@ -622,7 +635,7 @@ npm test
 npm run build
 ```
 
-A última verificação funcional registrada passou em **39 arquivos JavaScript e 33 testes automatizados**, além do build. Os testes cobrem autenticação, autorização por zona/perfil, cargos, clientes, equipes, desatribuição, anexos, SLA, métricas, reconhecimento de arquivos, importação, migração, conversor CSV, exportação e persistência/atualização de banco.
+A última verificação funcional registrada passou em **40 arquivos JavaScript e 37 testes automatizados**, além do build. Os testes cobrem autenticação, autorização por zona/perfil, cargos, clientes, equipes, desatribuição, anexos, SLA, métricas, reconhecimento de arquivos, categorias/referências/fotos da prévia, busca e paginação, validação sem gravação, importação, migração, conversor CSV, exportação e persistência/atualização de banco.
 
 ### Interface
 

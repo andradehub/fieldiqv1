@@ -235,27 +235,48 @@ export function createApp(db) {
     await db.query('UPDATE pessoas SET foto=$1 WHERE matricula=$2',[foto,req.user.matricula]);
     res.json({ok:true});
   });
-  api.post('/importacoes',async (req,res) => {
+  api.post(['/importacoes','/importacoes/validar'],async (req,res) => {
     supervisor(req.user);
     insist(Array.isArray(req.body.linhas) && req.body.linhas.length > 0 && req.body.linhas.length <= 500,400,'Importe entre 1 e 500 linhas por arquivo.');
     const name = text(req.body.nome,'Arquivo',200);
     const format = oneOf(req.body.formato,['csv','txt','json','xlsx','xls'],'Formato');
+    insist(req.body.confirmar===undefined||typeof req.body.confirmar==='boolean',400,'Informe se é validação ou importação.');
+    const preview=req.path==='/importacoes/validar'||req.body.confirmar===false,rollback=Symbol('preview');
     const details = [];
-    let imported = 0;
-    // Each valid row and its audit entry commit together; invalid rows are reported.
-    for (let i=0; i<req.body.linhas.length; i++) {
-      try {
+    let imported = 0,duplicates=0;
+    async function insertRow(tx,i){
         const body = {...req.body.linhas[i]};
         if (body.elevador_codigo) {
-          const found = await db.query('SELECT id FROM elevadores WHERE codigo=$1',[String(body.elevador_codigo).toUpperCase()]);
+          const found = await tx.query('SELECT id FROM elevadores WHERE codigo=$1',[String(body.elevador_codigo).toUpperCase()]);
           body.elevador_id = found.rows[0]?.id;
         }
-        await db.transaction(tx => insertTicket(tx,body,req.user,true));
-        imported++;
-      } catch (e) { details.push({linha:i+2,erro:e.code === '23505' ? 'Registro já importado.' : e.status ? e.message : 'Dados inválidos nesta linha.'}); }
+        await insertTicket(tx,body,req.user,true);
+    }
+    function rowError(error,i){
+      if(error.code==='23505')duplicates++;
+      details.push({linha:i+2,erro:error.code==='23505'?'Registro já importado.':error.status?error.message:'Dados inválidos nesta linha.'});
+    }
+    if(preview){
+      try{
+        await db.transaction(async tx=>{
+          for(let i=0;i<req.body.linhas.length;i++){
+            await tx.query('SAVEPOINT import_row');
+            try{await insertRow(tx,i);imported++;}
+            catch(error){await tx.query('ROLLBACK TO SAVEPOINT import_row');rowError(error,i);}
+            await tx.query('RELEASE SAVEPOINT import_row');
+          }
+          throw rollback;
+        });
+      }catch(error){if(error!==rollback)throw error;}
+      res.json({validado:true,validas:imported,importadas:0,erros:details.length,duplicadas:duplicates,detalhes:details});return;
+    }
+    // Each valid row and its audit entry commit together; invalid rows are reported.
+    for(let i=0;i<req.body.linhas.length;i++){
+      try{await db.transaction(tx=>insertRow(tx,i));imported++;}
+      catch(error){rowError(error,i);}
     }
     await db.query('INSERT INTO importacoes (usuario_matricula,nome,formato,importadas,erros,detalhes) VALUES ($1,$2,$3,$4,$5,$6)',[req.user.matricula,name,format,imported,details.length,JSON.stringify(details)]);
-    res.json({importadas:imported,erros:details.length,detalhes:details});
+    res.json({importadas:imported,erros:details.length,duplicadas:duplicates,detalhes:details});
   });
   api.post('/chamados/:id/sugestao',async (req,res) => {
     const ticket = await getTicket(db,req.params.id,req.user);
