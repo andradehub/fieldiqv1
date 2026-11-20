@@ -61,7 +61,18 @@ Se o repositório já está no computador, execute `npm ci` e `npm start` na sua
 
 Abrir `index.html` diretamente pelo explorador de arquivos não inicia a API nem o banco.
 
-Para testar em um celular físico na mesma rede, configure `HOST=0.0.0.0` no ambiente do servidor e abra `http://IP-DO-COMPUTADOR:4173` no celular, permitindo a conexão na rede local. No celular, `127.0.0.1` aponta para o próprio aparelho, não para o computador. O endereço e a porta devem corresponder ao ambiente configurado.
+Para abrir em celulares e outros computadores da mesma rede no Windows:
+
+1. Feche o servidor anterior com `Ctrl+C`, se estiver aberto.
+2. Execute [INICIAR-FIELDIQ-REDE.cmd](INICIAR-FIELDIQ-REDE.cmd). Na primeira configuração do firewall, clique com o botão direito e escolha **Executar como administrador**. Nas próximas vezes, isso só será necessário se a configuração da rede mudar.
+3. O inicializador mostra o endereço `http://IP-DO-COMPUTADOR:4173`. Abra esse endereço nos aparelhos conectados à mesma rede Wi-Fi ou cabo. Para clientes, acrescente `/cliente.html`.
+4. Mantenha o computador ligado e a janela do servidor aberta. Cada acesso continua sujeito ao login e às permissões da aplicação. As contas fictícias da demonstração continuam disponíveis; use somente dados fictícios nesse modo HTTP local.
+
+O [script de rede](scripts/local-network.ps1) identifica a conexão com gateway e vincula o servidor ao IPv4 dessa conexão. Cria ou atualiza apenas a regra `FieldIQ-LAN-TCP-4173`, limitada ao Node, à porta, ao endereço, à interface, ao perfil atual e à sub-rede IPv4 identificada. Não muda o perfil geral da rede nem desativa o firewall. O inicializador original continua usando o endereço local padrão. Isso disponibiliza uma demonstração na rede local; não publica o site na internet.
+
+Para conferir o endereço sem iniciar o servidor nem alterar o firewall, execute `powershell -NoProfile -File scripts/local-network.ps1 -CheckOnly`. Se houver várias conexões com gateway, informe `-InterfaceIndex NUMERO`, consultando os índices com `Get-NetIPConfiguration`. É possível usar `-Port NUMERO`; o inicializador de rede usa `4173` por padrão, independentemente do `PORT` do `.env`. Para preparar somente o firewall, use `-ConfigureOnly` em PowerShell como administrador. Para desativar a regra posteriormente, use `-Disable` como administrador e feche o servidor. As opções operam apenas na regra da porta informada.
+
+O IP pode mudar ao reconectar a rede; confira o endereço exibido em cada inicialização. No celular, `127.0.0.1` aponta para o próprio aparelho. Se não abrir, confira se ambos estão na mesma rede e se o roteador bloqueia a comunicação entre clientes (comum em redes de visitantes). O script não configura roteador, encaminhamento de portas ou acesso externo.
 
 ### Comandos disponíveis
 
@@ -523,6 +534,7 @@ fieldiqv1/
 ├── compose.yaml                PostgreSQL separado opcional
 ├── vercel.json                 Configuração de publicação
 ├── INICIAR-FIELDIQ.cmd          Inicializador Windows
+├── INICIAR-FIELDIQ-REDE.cmd     Inicializador Windows para a rede local
 ├── CONTRIBUTING.md             Processo de alteração, commits e validação
 ├── CHANGELOG.md                Evolução e motivos das alterações
 └── AGENTS.md                   Instruções de manutenção para agentes

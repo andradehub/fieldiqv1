@@ -2,6 +2,14 @@
 
 Este histórico registra o problema que motivou cada entrega e seu efeito na aplicação. Os commits publicados mantêm seus identificadores; as explicações abaixo complementam suas mensagens.
 
+## 2026-11-20 — acesso pela rede local no Windows
+
+**Motivo:** o responsável pediu acesso para outras pessoas na mesma rede. O servidor padrão escuta apenas em `127.0.0.1`, endereço que não aceita conexões de outros aparelhos.
+
+**Alterações:** inicializador `INICIAR-FIELDIQ-REDE.cmd` e script PowerShell que detectam uma conexão IPv4 com gateway, mostram os endereços das áreas interna e do cliente e vinculam o servidor ao IP selecionado. A regra de firewall é limitada ao executável Node, porta, endereço, interface, perfil e sub-rede detectados, sem mudar o perfil geral do Windows. Inclui consulta sem alterações, configuração isolada, desativação e escolha explícita de interface/porta. O inicializador original permanece disponível; não há publicação na internet.
+
+**Verificação:** sintaxe PowerShell, detecção da rede, configuração e reaplicação da regra, inspeção dos filtros e vínculo TCP no IPv4 da rede aprovados. O inicializador recusou iniciar uma segunda instância enquanto a porta estava ocupada. O servidor local existente respondeu `200` em saúde e `401` na consulta de dados sem sessão. `git diff --check` aprovado. A instância existente foi preservada: é preciso encerrá-la com `Ctrl+C` e usar o inicializador de rede. Acesso HTTP da aplicação a partir de outro aparelho ainda não testado.
+
 ## 2026-11-20 — documentação completa e padrão de manutenção
 
 **Motivo:** o responsável solicitou que todos os arquivos e commits do projeto estivessem no GitHub, com um README completo e a justificativa das alterações atuais e futuras.
