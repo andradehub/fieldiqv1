@@ -4,7 +4,7 @@ import path from 'node:path';
 import { seedDatabase } from './seed.mjs';
 
 export const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-const migrations = await Promise.all(['001-schema.sql','002-operacao.sql'].map(async name => ({name,sql:await readFile(new URL('../database/'+name,import.meta.url),'utf8')})));
+const migrations = await Promise.all(['001-schema.sql','002-operacao.sql','003-equipes.sql','004-clientes.sql','005-responsabilidade.sql'].map(async name => ({name,sql:await readFile(new URL('../database/'+name,import.meta.url),'utf8')})));
 export const schemaSQL = migrations.map(m=>m.sql).join('\n');
 
 export async function createDatabase(options = {}) {
@@ -79,6 +79,14 @@ export async function createDatabase(options = {}) {
       if (demo && !(await tx.query("SELECT matricula FROM pessoas WHERE role='administrativo'")).rows.length) {
         const {hashPassword}=await import('./auth.mjs');
         await tx.query("INSERT INTO pessoas(matricula,nome,role,cargo,regiao,zona_id,login,senha_hash) VALUES ('ADM-DEMO-001','Alex Ribeiro','administrativo','Administrativo / RH',NULL,NULL,'administrativo', $1)",[await hashPassword(options.password ?? process.env.DEMO_PASSWORD ?? 'tk2026')]);
+      }
+      if(demo&&!(await tx.query("SELECT matricula FROM pessoas WHERE login='cliente.barra'")).rows.length){
+        const local=(await tx.query("SELECT l.id FROM locais l WHERE l.zona_id='cap-04' ORDER BY l.id LIMIT 1")).rows[0];
+        if(local){
+          const {hashPassword}=await import('./auth.mjs');
+          await tx.query("INSERT INTO pessoas(matricula,nome,role,cargo,regiao,zona_id,login,senha_hash,email) VALUES ('CLI-DEMO-001','Cliente demonstração Barra','cliente','Representante de condomínio',NULL,NULL,'cliente.barra',$1,'cliente.barra@example.com')",[await hashPassword(options.password??process.env.DEMO_PASSWORD??'tk2026')]);
+          await tx.query("INSERT INTO cliente_locais(cliente_matricula,local_id) VALUES ('CLI-DEMO-001',$1)",[local.id]);
+        }
       }
     });
     if (!url) await adapter.query('SET search_path TO fieldiq, public');

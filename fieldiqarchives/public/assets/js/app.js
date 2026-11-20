@@ -2,7 +2,8 @@ import {state,routes,isSupervisor,isAdmin,acceptData,canEdit} from './core/state
 import {api} from './core/api.js';
 import {esc} from './core/format.js';
 import {readImport} from './core/import.js';
-import {icon,button,slaBadge} from './components/ui.js';
+import {icon,button,slaBadge,options} from './components/ui.js';
+import {jobTitles} from './core/jobs.js';
 import {renderLogin,renderSidebar,renderTopbar,renderBottomNav} from './views/shell.js';
 import {renderDashboard,mountCharts,disposeCharts} from './views/dashboard.js';
 import {renderTickets,renderTicketDialog,renderAi} from './views/tickets.js';
@@ -12,14 +13,34 @@ import {renderImports} from './views/imports.js';
 import {renderDatabase} from './views/database.js';
 import {renderUsers,renderUserDialog} from './views/users.js';
 import {renderMigration,renderMigrationDialog} from './views/migration.js';
-import {duration} from './views/attachments.js';
+import {renderRequests,renderReview} from './views/requests.js';
+import {duration,renderImageViewer} from './views/attachments.js';
 
 const $=id=>document.getElementById(id);
 const jobs=new Set();
+const userDrafts=new Map();
+const draftKey=registration=>(registration??'')||'$new';
+function rememberUserDraft(){
+  const form=$('utility-dialog').querySelector('form[data-form="user"]');
+  if(!form||!state.user)return;
+  const draft=Object.fromEntries(new FormData(form));
+  draft.role=$('user-role').value;draft.zona_id=$('user-zone').value;
+  draft.locais_ids=[...form.querySelectorAll('[name="locais_ids"]:checked')].map(n=>n.value);
+  userDrafts.set(draftKey(form.dataset.registration),draft);
+}
+function updateJobChoices(){
+  const role=$('user-role')?.value,select=$('user-position');if(!select)return;
+  const registration=$('utility-dialog').querySelector('form')?.dataset.registration;
+  const existing=state.usuarios.find(p=>p.matricula===registration);
+  select.innerHTML=options(jobTitles(role,existing?.role===role?existing.cargo:''),select.value);
+  const client=role==='cliente';$('user-client-locals').hidden=!client;
+  const zone=$('user-zone');zone.closest('label').hidden=client;zone.disabled=client||!isAdmin()||role==='administrativo';zone.required=!zone.disabled;
+  $('user-cpf').required=!registration&&!client;
+}
 let databaseRequest=0;
 const freshFilters=()=>({search:'',status:'',priority:'',work:'',technician:'',equipment:'',flag:'',period:'all'});
 const freshTicket=()=>({step:1,titulo:'',descricao:'',elevador_id:'',tipo_obra:'mod_parcial',prioridade:'media',sla_horas:24,tecnico:''});
-const views={dashboard:renderDashboard,chamados:renderTickets,novochamado:renderNewTicket,elevadores:renderAssets,tecnicos:renderTeam,usuarios:renderUsers,perfil:renderProfile,importacao:renderImports,banco:renderDatabase};
+const views={dashboard:renderDashboard,chamados:renderTickets,novochamado:renderNewTicket,elevadores:renderAssets,tecnicos:renderTeam,usuarios:renderUsers,solicitacoes:renderRequests,perfil:renderProfile,importacao:renderImports,banco:renderDatabase};
 
 function toast(message){
   $('toast').textContent=message;
@@ -42,6 +63,11 @@ async function execute(trigger,key,callback){
   try{return await callback();}
   catch(error){
     if(error.status===401&&state.user){showLogin();toast('Sua sessão expirou. Entre novamente.');}
+    else if(error.status===409&&state.ui.ticket){
+      const current=state.ui.ticket;
+      try{await reloadData();const latest=state.chamados.find(c=>c.id===current.record.id);if(latest&&state.ui.ticket===current){if(current.draft.status===current.record.status)current.draft.status=latest.status;current.record=latest;current.clockLoadedAt=Date.now();renderTicket(true);void loadTicketExtras();}}catch{}
+      toast(error.message+' Seus textos foram preservados; confira os dados e tente novamente.');
+    }
     else if(form?.isConnected)showFormError(form,error.message);
     else toast(error.message);
   }finally{
@@ -95,15 +121,19 @@ function navigate(route,{replace=false,focus=true}={}){
   if(route==='usuarios')void loadUsers();
 }
 async function reloadData(){
-  acceptData(await api('/bootstrap'));
+  const data=await api('/bootstrap');
+  if(data.portal){location.replace('/cliente.html');return false;}
+  acceptData(data);
   state.ui.database.info=null;state.ui.database.data=null;
 }
 function showLogin(){
+  userDrafts.clear();
+  $('image-dialog').close();
   disposeCharts();
   $('ticket-dialog').close();$('utility-dialog').close();
   closeMenu(false);
   state.user=null;
-  for(const key of ['zonas','pessoas','locais','elevadores','chamados','importacoes','usuarios'])state[key]=[];
+  for(const key of ['zonas','pessoas','locais','elevadores','chamados','importacoes','usuarios','solicitacoes'])state[key]=[];
   state.ui.users={};state.ui.migration=null;
   state.ui.ticket=null;state.ui.upload=null;state.ui.newTicket=freshTicket();state.ui.filters=freshFilters();
   databaseRequest++;
@@ -113,7 +143,8 @@ function showLogin(){
   $('login-root').innerHTML=renderLogin();
 }
 async function enterAccount(login,password){
-  await api('/auth/login',{method:'POST',body:{login,senha:password}});
+  const data=await api('/auth/login',{method:'POST',body:{login,senha:password}});
+  if(data.user.role==='cliente'){location.assign('/cliente.html');return;}
   await reloadData();
   $('login-root').hidden=true;$('app-shell').hidden=false;
   const initial=location.hash.slice(1);
@@ -262,10 +293,32 @@ document.addEventListener('click',event=>{
   if(action==='open-ticket'){openTicket(target.dataset.id);return;}
   if(action==='user-open'){
     const person=state.usuarios.find(p=>p.matricula===target.dataset.registration);
-    $('utility-dialog').innerHTML=renderUserDialog(person);state.ui.utility={kind:'user'};$('utility-dialog').showModal();return;
+    const draft=userDrafts.get(draftKey(person?.matricula));
+    $('utility-dialog').innerHTML=renderUserDialog(person,draft);state.ui.utility={kind:'user'};
+    if(draft){for(const[name,value]of Object.entries(draft)){if(name==='locais_ids'){for(const check of $('utility-dialog').querySelectorAll('[name="locais_ids"]'))check.checked=value.includes(check.value);continue;}const field=$('utility-dialog').querySelector('form').elements.namedItem(name);if(field)field.value=value;}}
+    updateJobChoices();
+    $('utility-dialog').showModal();return;
+  }
+  if(action==='user-discard'){
+    const form=$('utility-dialog').querySelector('form[data-form="user"]');
+    userDrafts.delete(draftKey(form.dataset.registration));state.ui.utility={discard:true};$('utility-dialog').close();return;
+  }
+  if(action==='image-preview'){
+    const a=state.ui.ticket?.attachments?.find(a=>a.id===Number(target.dataset.id));if(!a||!a.tipo.startsWith('image/'))return;
+    $('image-dialog').innerHTML=renderImageViewer(a);$('image-dialog').dataset.zoom='1';$('image-dialog').showModal();return;
+  }
+  if(action==='image-close'){$('image-dialog').close();return;}
+  if(action==='image-zoom'){
+    const dialog=$('image-dialog'),picture=$('image-viewer-img');
+    const zoom=Math.max(1,Math.min(3,Number(dialog.dataset.zoom??1)+Number(target.dataset.step)));
+    dialog.dataset.zoom=String(zoom);picture.style.width=zoom===1?'':picture.naturalWidth*zoom+'px';picture.classList.toggle('is-zoomed',zoom>1);$('image-zoom-value').textContent=Math.round(zoom*100)+'%';return;
   }
   if(action==='migration-open'){
     state.ui.migration=null;$('utility-dialog').innerHTML=renderMigrationDialog();state.ui.utility={kind:'migration'};$('utility-dialog').showModal();return;
+  }
+  if(action==='request-review'){
+    const request=state.solicitacoes.find(s=>s.id===Number(target.dataset.id));if(!request)return;
+    $('utility-dialog').innerHTML=renderReview(request);state.ui.utility={kind:'review'};$('utility-dialog').showModal();return;
   }
   if(action==='attendance-finish'){
     const current=state.ui.ticket;if(!current)return;
@@ -307,6 +360,17 @@ document.addEventListener('click',event=>{
   void execute(target,action,async()=>{
     if(action==='demo-login'){await enterAccount(target.dataset.login,'tk2026');}
     else if(action==='logout'){await api('/auth/logout',{method:'POST'});showLogin();}
+    else if(action==='ticket-join'){
+      const id=state.ui.ticket.record.id;await api('/chamados/'+id+'/equipe',{method:'POST'});await refreshTicket(id);toast('Você agora participa da equipe deste chamado.');
+    }
+    else if(action==='ticket-leave'){
+      const id=state.ui.ticket.record.id;await api('/chamados/'+id+'/equipe/'+encodeURIComponent(target.dataset.registration),{method:'DELETE'});await refreshTicket(id);toast('Participação encerrada. Os períodos de trabalho foram preservados.');
+    }
+    else if(action==='ticket-claim'||action==='ticket-release'){
+      const c=state.ui.ticket.record;
+      await api('/chamados/'+c.id+'/responsabilidade',{method:'POST',body:{acao:action==='ticket-claim'?'assumir':'liberar',revisao:c.revisao}});
+      await refreshTicket(c.id);toast(action==='ticket-claim'?'Você assumiu o chamado. Inicie o atendimento quando começar.':'Chamado liberado e aberto para outro técnico assumir.');
+    }
     else if(action==='attendance-start'||action==='attendance-pause'){
       const c=state.ui.ticket.record;
       await api('/chamados/'+c.id+'/atendimento',{method:'POST',body:{revisao:c.revisao,acao:action==='attendance-start'?'iniciar':'pausar'}});
@@ -380,16 +444,22 @@ document.addEventListener('submit',event=>{
       if(!isAdmin()){data.zona_id=state.user.zona_id;data.role='tecnico';}
       else if(state.usuarios.find(p=>p.matricula===registration)?.role==='administrativo'){data.role='administrativo';data.zona_id=null;}
       data.ativo=data.ativo==='true';
+      if(data.role==='cliente'){data.locais_ids=new FormData(form).getAll('locais_ids').map(Number);data.zona_id=null;}
+      else delete data.locais_ids;
       if(!data.cpf&&registration)delete data.cpf;
       if(!data.senha)delete data.senha;
       await api(registration?'/usuarios/'+encodeURIComponent(registration):'/usuarios',{method:registration?'PATCH':'POST',body:data});
-      $('utility-dialog').close();await reloadData();await loadUsers();renderShell();renderView();toast('Colaborador salvo.');
+      userDrafts.delete(draftKey(registration));state.ui.utility={discard:true};$('utility-dialog').close();await reloadData();await loadUsers();renderShell();renderView();toast('Colaborador salvo.');
+    }else if(type==='request-review'){
+      data.sla_horas=Number(data.sla_horas);data.tecnico=data.tecnico||null;
+      await api('/solicitacoes/'+form.dataset.id+'/triagem',{method:'POST',body:data});$('utility-dialog').close();await reloadData();renderShell();renderView();toast('Triagem registrada e disponível ao cliente.');
     }
   });
 });
 
 document.addEventListener('input',event=>{
   const target=event.target;
+  if(target.closest('form[data-form="user"]'))rememberUserDraft();
   if(target.dataset.newfield){
     state.ui.newTicket[target.dataset.newfield]=target.value;
     if($('new-context'))$('new-context').innerHTML=renderNewContext();
@@ -402,6 +472,11 @@ document.addEventListener('input',event=>{
 });
 document.addEventListener('change',event=>{
   const target=event.target;
+  if(target.id==='user-role')updateJobChoices();
+  if(target.id==='review-action'){
+    const accept=target.value==='aceitar';$('review-accept').hidden=!accept;$('review-return-field').hidden=accept;$('review-return').required=!accept;$('review-sla').required=accept;
+  }
+  if(target.closest('form[data-form="user"]'))rememberUserDraft();
   if(target.dataset.filter){state.ui.ticketPage=1;state.ui.filters[target.dataset.filter]=target.value;renderView(true);}
   if(target.dataset.draft&&state.ui.ticket){
     state.ui.ticket.draft[target.dataset.draft]=target.value;
@@ -434,14 +509,20 @@ document.addEventListener('drop',event=>{
   if(event.target.closest('#drop-zone')){event.preventDefault();void chooseFile(event.dataTransfer.files[0]);}
 });
 for(const id of ['ticket-dialog','utility-dialog']){
+  let startedOnBackdrop=false;
+  $(id).addEventListener('pointerdown',event=>{const box=$(id).getBoundingClientRect();startedOnBackdrop=event.target===$(id)&&(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom);});
   $(id).addEventListener('click',event=>{
+    if(id==='utility-dialog')return;
+    if(!startedOnBackdrop)return;
     if(event.target!==$(id))return;
     const box=$(id).getBoundingClientRect();
     if(event.clientX<box.left||event.clientX>box.right||event.clientY<box.top||event.clientY>box.bottom)$(id).close();
   });
 }
 $('ticket-dialog').addEventListener('close',()=>{state.ui.ticket=null;});
-$('utility-dialog').addEventListener('close',()=>{state.ui.utility=null;});
+$('utility-dialog').addEventListener('cancel',()=>{rememberUserDraft();});
+$('utility-dialog').addEventListener('close',()=>{if(!state.ui.utility?.discard)rememberUserDraft();state.ui.utility=null;});
+$('image-dialog').addEventListener('close',()=>{$('image-dialog').innerHTML='';});
 document.addEventListener('keydown',event=>{
   if(!state.ui.sidebar)return;
   if(event.key==='Escape'){closeMenu();return;}
@@ -457,7 +538,7 @@ window.addEventListener('popstate',()=>{if(state.user)navigate(location.hash.sli
 setInterval(()=>{
   const current=state.ui.ticket;if(!current)return;
   const c=current.record,work=document.querySelector('[data-attendance-duration]'),elapsed=document.querySelector('[data-ticket-elapsed]');
-  if(work)work.textContent=duration(Number(c.tempo_atendimento_seg)+(c.atendimento_ativo_desde?(Date.now()-current.clockLoadedAt)/1000:0));
+  if(work)work.textContent=duration(Number(c.tempo_atendimento_seg)+(current.intervals?.filter(a=>!a.encerrado_em).length??0)*(Date.now()-current.clockLoadedAt)/1000);
   if(elapsed&&['aberto','em_andamento'].includes(c.status))elapsed.textContent=duration((Date.now()-new Date(c.aberto_em))/1000);
   if(['aberto','em_andamento'].includes(c.status)){
     const overdue=Date.now()>new Date(c.aberto_em).getTime()+c.sla_horas*3600000;
@@ -466,7 +547,7 @@ setInterval(()=>{
 },1000);
 setInterval(()=>{
   if(!state.user||document.hidden||$('ticket-dialog').open||$('utility-dialog').open||jobs.size)return;
-  if(!['dashboard','chamados','tecnicos','perfil'].includes(state.ui.route))return;
+  if(!['dashboard','chamados','tecnicos','perfil','solicitacoes'].includes(state.ui.route))return;
   void execute(null,'auto-refresh',async()=>{await reloadData();renderView(true);});
 },30000);
 
@@ -474,7 +555,7 @@ setInterval(()=>{
   $('login-root').innerHTML='<div class="loading-state"><span class="spinner"></span>Preparando sua operação…</div>';
   try{
     state.config=await api('/config');
-    await reloadData();
+    if(await reloadData()===false)return;
     $('login-root').hidden=true;$('app-shell').hidden=false;
     navigate(location.hash.slice(1)||'dashboard',{replace:true,focus:false});
   }catch(error){

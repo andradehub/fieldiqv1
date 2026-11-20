@@ -24,6 +24,15 @@ try{
     try{
       const context=await browser.newContext({viewport:{width,height:844},hasTouch:true,isMobile:width<768,reducedMotion:'reduce'}),page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
       await page.goto(base);await page.locator('[data-login="administrativo"]').click();await page.locator('#page-title').waitFor();
+      await nav(page,'chamados');
+      for(const status of ['','aberto','em_andamento','resolvido','cancelado']){
+        const tab=page.locator('.tickets-tabs [data-status="'+status+'"]');
+        const box=await tab.boundingBox();assert.ok(box.x>=0&&box.x+box.width<=width+1,engine+' '+width+' status '+status+' clipped');
+      }
+      assert.ok(await page.locator('.tickets-tabs').evaluate(n=>n.scrollWidth<=n.clientWidth+1));
+      await page.locator('.tickets-tabs [data-status="cancelado"]').click();await page.locator('.tickets-tabs [data-status="cancelado"][aria-pressed="true"]').waitFor();
+      await check(page,engine+' '+width+' all ticket filters');await page.screenshot({path:path.join(output,engine+'-'+width+'-filtros.png')});
+      await page.locator('.tickets-tabs [data-status=""]').click();
       await nav(page,'usuarios');await page.locator('[data-action="user-open"]').first().click();
       await check(page,engine+' '+width+' user form');await page.screenshot({path:path.join(output,engine+'-'+width+'-usuario.png')});await page.keyboard.press('Escape');
       await nav(page,'importacao');await page.locator('[data-action="migration-open"]').click();await page.locator('#migration-file').setInputFiles(path.join(projectRoot,'fieldiqarchives/public/exemplo-migracao.json'));

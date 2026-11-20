@@ -1,4 +1,4 @@
-import {state,isSupervisor,regionName,personName,zoneName} from '../core/state.js';
+import {state,isSupervisor,regionName,personName,zoneName,isOnTicket} from '../core/state.js';
 import {esc,average,fmtTime,percent,fmtNumber,currentPeriod,attentionScore,weekKey} from '../core/format.js';
 import {icon,heading,button,metricCard,panelHeader,statusBadge,priorityBadge,emptyState,avatar} from '../components/ui.js';
 import {scopeLine} from './shell.js';
@@ -38,7 +38,7 @@ export function renderDashboard(){
       </section>
       <section class="panel">${panelHeader('Chamados por zona','Distribuição dos registros selecionados')}<div class="zone-bars">${zones.length?zones.map(z=>`<div class="zone-bar"><div class="zone-bar__label"><strong>${esc(z.local)}</strong><span>${z.list.length} chamados</span></div><div class="zone-bar__track"><span style="width:${Math.max(3,Math.round(z.list.length/Math.max(active.length,1)*100))}%"></span></div><small>${esc(z.nome)} · ${z.list.filter(c=>c.status==='resolvido').length} resolvidos</small></div>`).join(''):`<p class="text-muted">Sem registros para o período.</p>`}</div></section>
     </div>
-    ${isSupervisor()?`<section class="panel">${panelHeader('Carga de atendimento da equipe','Técnicos da área autorizada · volume de chamados atribuídos',button('Ver equipe',{route:'tecnicos',tone:'quiet',name:'ChevronRight'}))}<div class="workload-grid">${state.pessoas.filter(p=>p.role==='tecnico').map(p=>{const list=active.filter(c=>c.tecnico===p.matricula);return `<div class="workload-person">${avatar(p)}<div><strong>${esc(p.nome)}</strong><span>${list.filter(c=>['aberto','em_andamento'].includes(c.status)).length} pendentes · ${list.filter(c=>c.status==='resolvido').length} resolvidos</span></div></div>`;}).join('')}</div></section>`:''}
+    ${isSupervisor()?`<section class="panel">${panelHeader('Carga de atendimento da equipe','Técnicos da área autorizada · volume de chamados atribuídos',button('Ver equipe',{route:'tecnicos',tone:'quiet',name:'ChevronRight'}))}<div class="workload-grid">${state.pessoas.filter(p=>p.role==='tecnico').map(p=>{const list=active.filter(c=>isOnTicket(c,p.matricula));return `<div class="workload-person">${avatar(p)}<div><strong>${esc(p.nome)}</strong><span>${list.filter(c=>['aberto','em_andamento'].includes(c.status)).length} pendentes · ${list.filter(c=>c.status==='resolvido').length} resolvidos</span></div></div>`;}).join('')}</div></section>`:''}
     <p class="dashboard-footnote">Indicadores calculados a partir dos registros do banco. Chamados cancelados não entram na taxa de resolução.</p>`;
 }
 export function mountCharts(){

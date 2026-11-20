@@ -4,7 +4,7 @@ Dashboard para técnicos, supervisores e Administrativo / RH: chamados, locais, 
 
 ## Interface e pesquisa de UX/UI
 
-O redesign preserva o roxo e o laranja e reorganiza as nove áreas da aplicação. Inclui fonte Inter local, ícones Lucide, tabelas adaptadas para cartões, paginação, formulários em etapas e detalhes do chamado em abas.
+O redesign preserva o roxo e o laranja e reorganiza as dez áreas da aplicação. Inclui fonte Inter local, ícones Lucide, tabelas adaptadas para cartões, paginação, formulários em etapas e detalhes do chamado em abas.
 
 A pesquisa documental e as decisões de indicadores, navegação e responsividade estão em [docs/PESQUISA-UX-UI.md](docs/PESQUISA-UX-UI.md). O frontend está separado em core, components e views; os estilos em tokens, layout, components e views.
 
@@ -21,7 +21,7 @@ npm start
 
 Abra http://127.0.0.1:4173. No Windows, também é possível executar `INICIAR-FIELDIQ.cmd` na pasta do repositório.
 
-Na primeira execução são criados dez zonas, dez colaboradores, cinco locais, seis elevadores e dezessete chamados fictícios. As datas são relativas à primeira inicialização. As execuções seguintes preservam os registros e as alterações.
+Na primeira execução são criados dez zonas, onze contas (dez colaboradores e um cliente), cinco locais, seis elevadores e dezessete chamados fictícios. As datas são relativas à primeira inicialização. As execuções seguintes preservam os registros e as alterações.
 
 | Perfil | Login local | Senha local |
 | --- | --- | --- |
@@ -30,6 +30,7 @@ Na primeira execução são criados dez zonas, dez colaboradores, cinco locais, 
 | Técnico — Niterói | tecnico.interior | tk2026 |
 | Supervisor — Niterói | supervisor.interior | tk2026 |
 | Administrativo / RH — todas as zonas | administrativo | tk2026 |
+| Cliente — local da Barra | cliente.barra | tk2026 |
 
 Os acessos rápidos são exclusivos da demonstração local. Em PostgreSQL remoto, defina sua própria `DEMO_PASSWORD` e informe-a no formulário de login.
 
@@ -39,7 +40,7 @@ O modo local usa **PostgreSQL compilado para WebAssembly (PGlite)** no servidor 
 
 O mesmo esquema e as consultas podem usar um serviço PostgreSQL convencional por `DATABASE_URL`, incluindo um PostgreSQL hospedado no Supabase. Não são usados Supabase Auth, SDK ou tabelas do antigo exemplo.
 
-- Esquema: `database/001-schema.sql` e `database/002-operacao.sql`, dentro do schema PostgreSQL `fieldiq`.
+- Esquema: `database/001-schema.sql` a `database/005-responsabilidade.sql`, dentro do schema PostgreSQL `fieldiq`.
 - Relacionamento central: `zonas → locais → elevadores → chamados → historico_chamados`.
 - Pessoas se relacionam com zona, responsabilidade pelos chamados e autoria das alterações.
 - Senhas possuem hash scrypt; sessões usam token aleatório com apenas o hash no banco.
@@ -86,21 +87,23 @@ O servidor verifica as regras em cada operação. Encerramento exige solução; 
 
 ### Cadastro de colaboradores
 
-A Gestão de usuários inclui nome completo, matrícula, perfil, zona, cargo, CPF, e-mail comercial, telefone, admissão, usuário, senha e situação ativo/inativo. O CPF é validado por dígitos verificadores e aparece mascarado na listagem. Não há consulta de regularidade na Receita. Contatos e CPF não são enviados no catálogo operacional compartilhado com técnicos. Novas senhas têm no mínimo 12 caracteres e são armazenadas com scrypt. O primeiro perfil Administrativo é criado pelo comando de configuração; não há promoção para esse perfil na tela de cadastro.
+A Gestão de usuários inclui nome completo, matrícula, perfil, zona, cargo, CPF, e-mail comercial, telefone, admissão, usuário, senha e situação ativo/inativo. O CPF é validado por dígitos verificadores e aparece mascarado na listagem. Não há consulta de regularidade na Receita. Contatos e CPF não são enviados no catálogo operacional compartilhado com técnicos. Novas senhas têm no mínimo 12 caracteres e são armazenadas com scrypt. O primeiro perfil Administrativo é criado pelo comando de configuração; não há promoção para esse perfil na tela de cadastro. Cargos são selecionados a partir de listas por perfil, incluindo Estagiário de campo. A pesquisa e as regras estão em [docs/CARGOS-E-PORTAL.md](docs/CARGOS-E-PORTAL.md).
+
+Cliques fora do cadastro não fecham o diálogo. Fechar ou usar Esc mantém um rascunho em memória da sessão; salvar, descartar, sair da conta ou recarregar a página limpa o rascunho. Dados sensíveis do formulário não são guardados em localStorage.
 
 ### Horários, SLA e indicadores
 
-- Iniciar/retomar cria um período de trabalho com horário do servidor e grava o primeiro início. Pausar encerra o período ativo. Concluir grava a solução, fecha qualquer período ativo e registra o encerramento.
+- Iniciar/retomar cria um período de trabalho com horário do servidor e grava o primeiro início. Outros técnicos da mesma zona podem participar do chamado sem trocar o responsável principal. Pausar encerra somente o período de quem acionou. A conclusão, pelo responsável principal ou pela gestão, grava a solução e fecha todos os períodos ativos.
 - SLA de resolução: prazo em horas corridas desde a abertura. Pausas não suspendem o prazo; reabrir não altera a abertura nem concede prazo novo.
 - Tempo de resolução: encerramento menos abertura. A média considera chamados resolvidos no recorte de abertura escolhido no painel.
-- Trabalho registrado: soma dos períodos iniciados e encerrados, excluindo pausas. É mostrado no detalhe, separado do tempo de resolução.
+- Trabalho registrado: soma dos períodos de cada participante, excluindo pausas. Duas pessoas por uma hora somam duas horas de trabalho, enquanto o tempo do chamado permanece uma hora. É mostrado no detalhe, separado do tempo de resolução.
 - SLA cumprido: resolvidos dentro do prazo dividido pelo total de resolvidos no recorte. Pendentes vencidos aparecem no contador de atrasos.
 - Taxa de resolução: resolvidos dividido pelos chamados não cancelados no mesmo recorte. Cancelados não entram nesse denominador.
 - Após ações, os dados são recarregados do banco. O painel e as listagens em repouso se atualizam a cada 30 segundos; os contadores do detalhe avançam a cada segundo. Formulários em edição não são substituídos automaticamente.
 
 ### Fotos e documentos
 
-A aba Anexos aceita JPG/JPEG, PNG, WebP, PDF, TXT, CSV, DOCX e XLSX. Limites: 2 MB por arquivo; 20 arquivos e 20 MB por chamado. O servidor verifica conteúdo e extensão, permissões, duplicidade e tamanho. Fotos têm miniatura; documentos são baixados. Arquivos são persistidos como bytea no PostgreSQL e não ficam disponíveis como caminhos públicos. Inclusão e exclusão ficam no histórico com autoria. O técnico responsável exclui apenas os anexos que enviou; a gestão pode excluir os anexos do seu escopo. A IA continua usando o texto dos chamados e das soluções, sem leitura automática dos anexos.
+A aba Anexos aceita JPG/JPEG, PNG, WebP, PDF, TXT, CSV, DOCX e XLSX. Limites: 2 MB por arquivo; 20 arquivos e 20 MB por chamado. O servidor verifica conteúdo e extensão, permissões, duplicidade e tamanho. Fotos têm miniatura proporcional e visualizador ampliado com zoom; documentos são baixados. Arquivos são persistidos como bytea no PostgreSQL e não ficam disponíveis como caminhos públicos. Inclusão e exclusão ficam no histórico com autoria. O técnico responsável exclui apenas os anexos que enviou; a gestão pode excluir os anexos do seu escopo. A IA continua usando o texto dos chamados e das soluções, sem leitura automática dos anexos.
 
 ## Assistente de diagnóstico
 
@@ -141,6 +144,22 @@ O código do elevador e o técnico devem pertencer à mesma zona, dentro do esco
 
 A migração completa preserva cadastros relacionados e datas originais em uma transação. O Administrativo seleciona **Migrar cadastros e histórico**, valida um pacote JSON e confirma a importação. O exemplo completo é fictício. Para CSVs de várias tabelas, há conversor com mapeamento de colunas e valores. Consulte [o guia de migração e a pesquisa do setor](docs/MIGRACAO-E-SISTEMAS-DO-SETOR.md).
 
+### Assumir e liberar chamados
+
+Pausar mantém a responsabilidade. **Liberar chamado** remove o responsável, pausa os períodos ativos da equipe e deixa o registro Aberto, sem concluir nem reiniciar o SLA. Outro técnico da mesma zona pode escolher **Assumir chamado** e iniciar o próprio atendimento. A gestão também pode desatribuir pelo formulário; Não atribuído em um chamado em andamento normaliza o status para Aberto. Registros antigos com essa inconsistência são ajustados na migração 005.
+
+No celular, todos os filtros de situação ficam visíveis em uma grade, incluindo Cancelados. As abas de detalhe também se reorganizam, e os filtros completos ocupam a largura disponível em telas pequenas.
+
+## Portal do cliente
+
+O endereço `/cliente.html` apresenta uma interface própria, com locais e elevadores vinculados, solicitações pendentes e atendimentos concluídos da conta. O Administrativo cadastra clientes e vincula os locais na Gestão de usuários.
+
+O cliente envia uma solicitação, que fica aguardando triagem. O supervisor da zona ou o Administrativo define prioridade, prazo e responsável, ou retorna com justificativa. Ao aceitar, a abertura original é preservada no SLA. O cliente acompanha o andamento sem ver informações internas de produtividade, diagnóstico ou equipe. Lembretes ficam registrados na fila interna, com intervalo mínimo de uma hora por solicitação; não são enviados e-mails.
+
+## Base fictícia completa para importar
+
+Baixe [demonstracao-fieldiq.json](fieldiqarchives/public/demonstracao-fieldiq.json) ou use o botão na tela de migração. Inclui 10 zonas, 40 colaboradores com avatares ilustrados, contatos e cargos, 20 locais, 40 elevadores, 160 chamados e registros de equipe e trabalho. Não foi importada automaticamente na base existente. Entre como Administrativo, selecione **Importar dados → Migrar cadastros e histórico**, valide e confirme. As contas migradas ficam inativas até definir senha e ativação. Mais detalhes em [docs/CARGOS-E-PORTAL.md](docs/CARGOS-E-PORTAL.md).
+
 ## Publicar novamente
 
 A demonstração local está pronta para execução; nenhuma conta antiga no Supabase ou Vercel precisa ser apagada. A configuração da publicação está em `vercel.json` e `api/index.mjs`.
@@ -163,10 +182,12 @@ npm test
 npm run build
 npm run test:browser
 node test/browser-operations.mjs
+node test/browser-followups.mjs
+node test/browser-team.mjs
 ```
 
 Os testes de API verificam autenticação, zonas, papéis, cadastro, atribuição, encerramento, SLA, concorrência, evidências, importação, exportação e persistência após fechar/reabrir o banco. Os testes de geração usam respostas simuladas: nenhuma chave nem chamada externa é necessária.
 
-A suíte de interface usa Edge/Chromium, oito larguras entre 320 e 1440 px e dezessete verificações axe. WebKit é usado quando instalado para verificar a engine em dimensões de iPhone. Isso não substitui teste em aparelho físico nem certificação integral de acessibilidade. Os fluxos novos também são testados em 320, 390 e 834 px, incluindo WebKit, com verificações de acessibilidade nos formulários, anexos, migração e atendimento. Capturas e relatórios ficam em test-results/redesign e test-results/operations.
+A suíte de interface usa Edge/Chromium, oito larguras entre 320 e 1440 px e dezessete verificações axe. WebKit é usado quando instalado para verificar a engine em dimensões de iPhone. Isso não substitui teste em aparelho físico nem certificação integral de acessibilidade. Os fluxos novos também são testados em 320, 390 e 834 px, incluindo WebKit, com verificações de acessibilidade nos formulários, anexos, migração e atendimento. Capturas e relatórios ficam em test-results/redesign, test-results/operations e test-results/followups. A suíte adicional cobre rascunhos, seleção de cargos, imagens proporcionais/zoom, a base de importação completa e o ciclo cliente–triagem no Edge e WebKit.
 
 Para apresentar o projeto, veja [docs/APRESENTACAO-TCC.md](docs/APRESENTACAO-TCC.md).

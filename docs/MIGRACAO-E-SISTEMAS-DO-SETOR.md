@@ -20,7 +20,7 @@ As referências são fontes dos fornecedores, não uma comparação independente
 Há dois fluxos separados:
 
 - **Importar chamados:** CSV/TXT, Excel ou lista JSON, até 500 linhas. Usado quando os elevadores já estão cadastrados. Disponível ao supervisor da zona e ao Administrativo.
-- **Migrar cadastros e histórico:** pacote JSON `fieldiq-legado-v1`, até 1.000 registros e 2 MB. Exclusivo do Administrativo. Inclui zonas, técnicos/supervisores, locais, elevadores, chamados e registros de histórico. CSVs de várias tabelas podem ser convertidos pelo utilitário descrito abaixo.
+- **Migrar cadastros e histórico:** pacote JSON `fieldiq-legado-v1`, até 1.000 registros e 2 MB. Exclusivo do Administrativo. Inclui zonas, técnicos/supervisores, locais, elevadores, chamados, registros de histórico e, opcionalmente, participações de equipe e períodos de trabalho encerrados. Fotos de perfil PNG/JPEG/WebP em base64, de até 96 KB, podem acompanhar os colaboradores. CSVs de várias tabelas podem ser convertidos pelo utilitário descrito abaixo.
 
 O modelo completo está em `fieldiqarchives/public/exemplo-migracao.json` e pode ser baixado na interface. Seus dados são fictícios e não representam uma exportação oficial de qualquer fornecedor.
 
@@ -55,7 +55,7 @@ Um primeiro início histórico não comprova o tempo efetivamente trabalhado. Po
 
 ## Conversão de CSVs de um sistema anterior
 
-O utilitário `scripts/convert-legacy.mjs` lê `zonas.csv`, `pessoas.csv`, `locais.csv`, `elevadores.csv`, `chamados.csv` e `historicos.csv` de uma pasta. Arquivos ausentes são omitidos. Use UTF-8; os delimitadores vírgula, ponto e vírgula, tabulação e barra vertical são reconhecidos.
+O utilitário `scripts/convert-legacy.mjs` lê `zonas.csv`, `pessoas.csv`, `locais.csv`, `elevadores.csv`, `chamados.csv`, `historicos.csv`, `equipes.csv` e `atendimentos.csv` de uma pasta. Arquivos ausentes são omitidos. Use UTF-8; os delimitadores vírgula, ponto e vírgula, tabulação e barra vertical são reconhecidos.
 
 Exemplo em PowerShell, a partir da pasta do projeto:
 
@@ -89,4 +89,4 @@ Esse mapeamento é ilustrativo. Não corresponde ao esquema proprietário de Lif
 
 Quando a empresa tem acesso autorizado ao banco, a extração deve ser feita com ferramentas do SGBD e consultas ajustadas ao esquema. O [PostgreSQL documenta exportação CSV por COPY](https://www.postgresql.org/docs/current/sql-copy.html); o [SQL Server documenta importação e exportação de arquivos e outras fontes](https://learn.microsoft.com/en-us/sql/relational-databases/import-export/overview-import-export?view=sql-server-ver16). Isso não significa que esses SGBDs predominem no setor.
 
-O FieldIQ não executa SQL recebido por upload, não restaura arquivos BAK/FDB e não se conecta automaticamente a fornecedores. A migração foi validada com dados fictícios no modelo fornecido; uma migração real exige amostra de exportação, mapeamento e conferência com a empresa. Anexos binários e períodos completos de trabalho anteriores não fazem parte deste pacote de migração.
+O FieldIQ não executa SQL recebido por upload, não restaura arquivos BAK/FDB e não se conecta automaticamente a fornecedores. A migração foi validada com dados fictícios no modelo fornecido; uma migração real exige amostra de exportação, mapeamento e conferência com a empresa. Anexos dos chamados não fazem parte deste pacote. Períodos completos anteriores podem ser informados na lista opcional atendimentos, com id, chamado_id, tecnico_id, iniciado_em e encerrado_em; sobreposições do mesmo técnico são rejeitadas. A lista equipes, com id, chamado_id e tecnico_id, preserva participações. Consulte CARGOS-E-PORTAL.md para a base fictícia completa.

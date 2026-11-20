@@ -1,4 +1,4 @@
-import {state,isSupervisor,canEdit,personName,zoneName,team} from '../core/state.js';
+import {state,isSupervisor,canEdit,canClose,isOnTicket,attendanceWorker,personName,zoneName,team} from '../core/state.js';
 import {esc,fmtDate,fmtTime,currentPeriod,dueAt} from '../core/format.js';
 import {icon,heading,button,iconButton,badge,avatar,statusBadge,priorityBadge,workBadge,slaBadge,slaCell,emptyState,panelHeader,options,STATUS,PRIORITIES,WORKS,notice} from '../components/ui.js';
 import {renderTiming,renderAttachments} from './attachments.js';
@@ -12,7 +12,7 @@ export function filteredTickets(){
     if(f.status&&f.status!=='pending'&&c.status!==f.status)return false;
     if(f.priority&&c.prioridade!==f.priority)return false;
     if(f.work&&c.tipo_obra!==f.work)return false;
-    if(f.technician&&c.tecnico!==f.technician)return false;
+    if(f.technician&&!isOnTicket(c,f.technician))return false;
     if(f.equipment&&String(c.elevador_id)!==String(f.equipment))return false;
     if(f.flag==='sla'&&!c.sla_vencido)return false;
     if(f.flag==='unassigned'&&c.tecnico)return false;
@@ -58,6 +58,11 @@ export function renderTickets(){
     </section>`;
 }
 function fact(label,value){return `<div class="ticket-fact"><span>${label}</span><div>${value}</div></div>`;}
+function renderTicketTeam(c){
+  const people=[...new Set([c.tecnico,...(c.equipe_matriculas??[])].filter(Boolean))];
+  const join=state.user.role==='tecnico'&&c.tecnico&&!isOnTicket(c,state.user.matricula)&&['aberto','em_andamento'].includes(c.status);
+  return `<section class="ticket-section ticket-team"><div class="ticket-team-heading"><h3>Equipe do chamado</h3>${join?button('Participar do atendimento',{action:'ticket-join',name:'UserRoundPlus',tone:'secondary'}):''}${c.tecnico&&canClose(c)&&['aberto','em_andamento'].includes(c.status)?button('Liberar chamado',{action:'ticket-release',name:'UserRoundMinus',tone:'secondary'}):''}</div><div class="ticket-team-list">${people.map(mat=>{const p=state.pessoas.find(p=>p.matricula===mat);return `<div class="ticket-team-person">${p?avatar(p):''}<div><strong>${esc(personName(mat))}</strong><small>${esc(p?.cargo??'Técnico')}</small>${badge(mat===c.tecnico?'Responsável principal':'Participante',mat===c.tecnico?'purple':'neutral')}${mat!==c.tecnico&&['aberto','em_andamento'].includes(c.status)&&(isSupervisor()||mat===state.user.matricula)?button(mat===state.user.matricula?'Sair da equipe':'Remover participante',{action:'ticket-leave',attrs:'data-registration="'+esc(mat)+'"',tone:'quiet',className:'button--small'}):''}</div></div>`;}).join('')||'<p class="text-muted">Aguardando atribuição do responsável.</p>'}</div><p class="text-small text-muted">Cada participante registra seu período. O responsável principal e a gestão concluem o chamado.</p></section>`;
+}
 function renderOverview(c){
   return `<div class="ticket-overview">
     <div class="ticket-facts">
@@ -68,6 +73,7 @@ function renderOverview(c){
       ${fact('Prazo de atendimento',`${c.sla_horas} horas<small>Até ${fmtDate(dueAt(c))}</small>`)}
       ${fact('Classificação',workBadge(c.tipo_obra))}
     </div>
+    ${renderTicketTeam(c)}
     <section class="ticket-section"><h3>Descrição do problema</h3><p class="body-copy">${esc(c.descricao||'Nenhuma descrição foi registrada para este chamado.')}</p></section>
     ${c.solucao?`<section class="solution-note"><div>${icon('CircleCheck',18)}<h3>Solução registrada</h3></div><p class="body-copy">${esc(c.solucao)}</p><span>Encerrado em ${fmtDate(c.resolvido_em)}</span></section>`:''}
     ${renderTiming(c)}
@@ -77,7 +83,7 @@ function renderOverview(c){
 function renderEdit(c){
   if(!canEdit(c))return notice('Este chamado pode ser alterado apenas pelo responsável ou pelo supervisor da zona.','LockKeyhole');
   const draft=state.ui.ticket.draft;
-  const statuses=isSupervisor()?STATUS:c.status==='resolvido'?{resolvido:STATUS.resolvido}:{aberto:STATUS.aberto,em_andamento:STATUS.em_andamento,resolvido:STATUS.resolvido};
+  const statuses=!canClose(c)?{[c.status]:STATUS[c.status]}:isSupervisor()?STATUS:c.status==='resolvido'?{resolvido:STATUS.resolvido}:{aberto:STATUS.aberto,em_andamento:STATUS.em_andamento,resolvido:STATUS.resolvido};
   return `<form id="ticket-edit-form" data-form="ticket-edit" class="form-stack">
     ${notice('Registre a solução aplicada antes de marcar o atendimento como resolvido.','ClipboardCheck','purple')}
     <div class="field-grid">
@@ -95,12 +101,15 @@ function renderHistory(c){
 }
 export function renderTicketDialog(){
   const current=state.ui.ticket,c=current?.record;if(!c)return '';
+  const ownIntervals=current.intervals?.filter(a=>a.tecnico_matricula===attendanceWorker(c))??[];
+  const ownActive=ownIntervals.some(a=>!a.encerrado_em);
   const tabs={overview:'Visão geral',edit:'Atendimento',files:'Anexos'+(c.total_anexos?' ('+c.total_anexos+')':''),history:'Histórico'};
   return `<div class="sheet-header"><div><div class="sheet-eyebrow">CHAMADO #${c.id} · ${esc(c.elevador_codigo)}</div><h2 id="ticket-title">${esc(c.titulo)}</h2><div class="sheet-tags">${statusBadge(c.status)}${priorityBadge(c.prioridade)}<span id="ticket-sla">${slaBadge(c)}</span></div></div>${iconButton('X','Fechar detalhes do chamado','close-ticket')}</div>
     <div class="sheet-tabs tabs">${Object.entries(tabs).map(([key,label])=>`<button type="button" class="tab ${current.tab===key?'is-active':''}" data-action="ticket-tab" data-tab="${key}" aria-pressed="${current.tab===key}">${label}</button>`).join('')}</div>
     <div class="sheet-body" id="ticket-body">${current.tab==='overview'?renderOverview(c):current.tab==='edit'?renderEdit(c):current.tab==='files'?renderAttachments(c):renderHistory(c)}</div>
     <div class="sheet-footer"><span>${icon('CalendarDays',15)} Aberto em ${fmtDate(c.aberto_em,{dateOnly:true})}</span><div>${button('Fechar',{action:'close-ticket'})}
-    ${canEdit(c)&&['aberto','em_andamento'].includes(c.status)?`<div class="attendance-actions">${button(c.atendimento_ativo_desde?'Pausar atendimento':c.iniciado_em?'Retomar atendimento':'Iniciar atendimento',{action:c.atendimento_ativo_desde?'attendance-pause':'attendance-start',name:c.atendimento_ativo_desde?'Pause':'Play',tone:'secondary'})}${button('Concluir atendimento',{action:'attendance-finish',name:'CircleCheck',tone:'primary'})}</div>`:''}
+    ${!c.tecnico&&state.user.role==='tecnico'&&['aberto','em_andamento'].includes(c.status)?button('Assumir chamado',{action:'ticket-claim',name:'UserRoundCheck',tone:'primary'}):''}
+    ${current.tab!=='edit'&&c.tecnico&&canEdit(c)&&['aberto','em_andamento'].includes(c.status)?`<div class="attendance-actions">${button(ownActive?'Pausar atendimento':ownIntervals.length?'Retomar atendimento':'Iniciar atendimento',{action:ownActive?'attendance-pause':'attendance-start',name:ownActive?'Pause':'Play',tone:'secondary',attrs:current.intervals===null?'disabled':''})}${canClose(c)?button('Concluir atendimento',{action:'attendance-finish',name:'CircleCheck',tone:'primary'}):''}</div>`:''}
     ${current.tab==='edit'&&canEdit(c)?`<button type="submit" form="ticket-edit-form" class="button button--primary" id="ticket-save">${icon('Check',18)}${current.draft.status==='resolvido'&&c.status!=='resolvido'?'Confirmar conclusão':'Salvar atendimento'}</button>`:canEdit(c)&&c.status==='resolvido'?button('Revisar registro',{action:'ticket-tab',attrs:'data-tab="edit"',tone:'secondary',name:'SquarePen'}):''}</div></div>`;
 }
 export function renderAi(ai,c){

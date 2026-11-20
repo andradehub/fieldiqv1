@@ -1,11 +1,12 @@
 import {state} from '../core/state.js';
 import {esc} from '../core/format.js';
 import {button,icon,notice} from '../components/ui.js';
-const names={zonas:'Zonas',pessoas:'Colaboradores',locais:'Locais',elevadores:'Elevadores',chamados:'Chamados',historicos:'Registros de histórico'};
+const names={zonas:'Zonas',pessoas:'Colaboradores',locais:'Locais',elevadores:'Elevadores',chamados:'Chamados',historicos:'Registros de histórico',equipes:'Participações em equipe',atendimentos:'Períodos de trabalho'};
 export function renderMigration(){
   const m=state.ui.migration;
   return `<p class="body-copy">Reaproveite cadastros e histórico de outro sistema. Exporte os dados na origem e organize-os no modelo FieldIQ antes de enviar.</p>
     <a class="button button--secondary" href="/exemplo-migracao.json" download>${icon('Download',17)}Baixar exemplo completo JSON</a>
+    <a class="button button--secondary" href="/demonstracao-fieldiq.json" download>${icon('UsersRound',17)}Baixar base fictícia com equipes e fotos</a>
     <label class="attachment-upload" for="migration-file">${icon('Database',22)}<strong>Selecionar pacote de migração</strong><span>JSON no modelo FieldIQ · até 2 MB e 1.000 registros</span><input id="migration-file" data-change="migration-file" type="file" accept=".json"></label>
     ${m?.pack?`<div class="migration-source"><strong>${esc(m.file.name)}</strong><span>Origem: ${esc(m.pack.origem??'Não informada')}</span></div><div class="migration-counts">${Object.entries(names).map(([key,label])=>`<div><span>${label}</span><strong>${Array.isArray(m.pack[key])?m.pack[key].length:0}</strong></div>`).join('')}</div>`:''}
     ${m?.result?`${notice(m.result.ja_importado?'Este pacote já foi importado.':m.result.importado?'Migração concluída. Cadastros e vínculos preservados.':'Validação concluída. Confira as quantidades antes de importar.','CircleCheck','success')}<div class="table-wrap"><table class="data-table"><thead><tr><th>Cadastro</th><th>${m.result.importado?'Criados':'A criar'}</th><th>Reutilizados</th></tr></thead><tbody>${Object.entries(names).map(([key,label])=>`<tr><td>${label}</td><td>${m.result.resumo.criados[key]??0}</td><td>${m.result.resumo.reutilizados[key]??0}</td></tr>`).join('')}</tbody></table></div>`:''}

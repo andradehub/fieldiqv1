@@ -5,7 +5,7 @@ import {parseCSV} from '../fieldiqarchives/public/assets/js/core/import.js';
 export async function convertFolder(folder,source,mapping={}){
   if(!source?.trim())throw new Error('Informe um nome para identificar o sistema de origem.');
   const pack={formato:'fieldiq-legado-v1',origem:source};
-  for(const entity of ['zonas','pessoas','locais','elevadores','chamados','historicos']){
+  for(const entity of ['zonas','pessoas','locais','elevadores','chamados','historicos','equipes','atendimentos']){
     let content;
     try{content=await readFile(path.join(folder,entity+'.csv'),'utf8');}catch(error){if(error.code==='ENOENT')continue;throw error;}
     pack[entity]=parseCSV(content).map(raw=>{

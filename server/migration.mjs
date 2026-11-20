@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {ApiError,insist,text,integer,oneOf,isAdmin} from './permissions.mjs';
 import {saveUser} from './users.mjs';
-const entities=['zonas','pessoas','locais','elevadores','chamados','historicos'];
+const entities=['zonas','pessoas','locais','elevadores','chamados','historicos','equipes','atendimentos'];
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const rollback=Symbol('preview');
 export function registerMigrationRoutes(api,db,insertTicket){
@@ -50,7 +50,7 @@ export function registerMigrationRoutes(api,db,insertTicket){
                 const zone=await ref('zonas',row.zona_id),mat=text(row.matricula,'Matrícula',40).toUpperCase();
                 const p=(await tx.query('SELECT * FROM pessoas WHERE matricula=$1',[mat])).rows[0];
                 if(p){insist(p.nome===row.nome&&p.role===row.role&&p.zona_id===zone,409,'Matrícula existente com outros dados.');id=mat;reused=true;}
-                else id=await saveUser(tx,req.user,{matricula:mat,nome:row.nome,role:row.role,cargo:row.cargo,zona_id:zone,cpf:row.cpf,email:row.email,telefone:row.telefone,admissao:row.admissao,ativo:false},null,{migration:true});
+                else id=await saveUser(tx,req.user,{matricula:mat,nome:row.nome,role:row.role,cargo:row.cargo,zona_id:zone,cpf:row.cpf,email:row.email,telefone:row.telefone,admissao:row.admissao,login:row.login,foto:row.foto,ativo:false},null,{migration:true});
               }else if(entity==='locais'){
                 id=(await tx.query('INSERT INTO locais(nome,endereco,bairro,zona_id) VALUES ($1,$2,$3,$4) RETURNING id',[text(row.nome,'Local',150),text(row.endereco,'Endereço',300),text(row.bairro,'Bairro',100),await ref('zonas',row.zona_id)])).rows[0].id;
               }else if(entity==='elevadores'){
@@ -64,11 +64,26 @@ export function registerMigrationRoutes(api,db,insertTicket){
                   insist(Number.isFinite(start.getTime())&&start>=new Date(row.aberto_em)&&start<=end,400,'Data de início fora do intervalo do chamado.');
                   await tx.query('UPDATE chamados SET iniciado_em=$1 WHERE id=$2',[start.toISOString(),id]);
                 }
-              }else{
+              }else if(entity==='historicos'){
                 const ticket=Number(await ref('chamados',row.chamado_id)),author=row.usuario_id?await ref('pessoas',row.usuario_id):req.user.matricula;
                 const date=new Date(row.data),c=(await tx.query('SELECT aberto_em FROM chamados WHERE id=$1',[ticket])).rows[0];
                 insist(Number.isFinite(date.getTime())&&date>=new Date(c.aberto_em)&&date.getTime()<=Date.now()+60000,400,'Data de histórico inválida.');
                 id=(await tx.query('INSERT INTO historico_chamados(chamado_id,usuario_matricula,alteracao,data) VALUES ($1,$2,$3,$4) RETURNING id',[ticket,author,text(row.alteracao,'Alteração',10000),date.toISOString()])).rows[0].id;
+              }else{
+                const ticket=Number(await ref('chamados',row.chamado_id)),person=await ref('pessoas',row.tecnico_id);
+                const c=(await tx.query('SELECT * FROM vw_chamados_metricas WHERE id=$1',[ticket])).rows[0];
+                const p=(await tx.query("SELECT zona_id FROM pessoas WHERE matricula=$1 AND role='tecnico'",[person])).rows[0];
+                insist(p&&p.zona_id===c.zona_id,400,'O participante precisa ser técnico da zona do chamado.');
+                await tx.query('INSERT INTO equipe_chamado(chamado_id,tecnico_matricula,adicionado_por) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',[ticket,person,req.user.matricula]);
+                if(entity==='equipes'){id=ticket+':'+person;}
+                else{
+                  const start=new Date(row.iniciado_em),end=new Date(row.encerrado_em);
+                  insist(row.encerrado_em&&Number.isFinite(start.getTime())&&Number.isFinite(end.getTime())&&start>=new Date(c.aberto_em)&&end>=start&&end<=new Date()&&(!c.resolvido_em||end<=new Date(c.resolvido_em)),400,'Período histórico exige início e fim válidos dentro do chamado.');
+                  const overlap=(await tx.query('SELECT id FROM atendimentos WHERE chamado_id=$1 AND tecnico_matricula=$2 AND iniciado_em<$4 AND COALESCE(encerrado_em,now())>$3',[ticket,person,start.toISOString(),end.toISOString()])).rows;
+                  insist(!overlap.length,400,'O técnico tem períodos de trabalho sobrepostos neste chamado.');
+                  id=(await tx.query('INSERT INTO atendimentos(chamado_id,tecnico_matricula,iniciado_em,encerrado_em) VALUES ($1,$2,$3,$4) RETURNING id',[ticket,person,start.toISOString(),end.toISOString()])).rows[0].id;
+                  await tx.query('UPDATE chamados SET iniciado_em=LEAST(COALESCE(iniciado_em,$1::timestamptz),$1::timestamptz) WHERE id=$2',[start.toISOString(),ticket]);
+                }
               }
               maps[entity].set(legacy,String(id));summary[reused?'reutilizados':'criados'][entity]++;
               await tx.query('INSERT INTO referencias_legado(origem,entidade,id_legado,id_destino,dados_hash) VALUES ($1,$2,$3,$4,$5)',[source,entity,legacy,String(id),digest(row)]);

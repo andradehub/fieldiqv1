@@ -28,14 +28,14 @@ export function renderLogin(){
       ${state.config.quickDemo?`<details class="demo-access" open><summary>Acessos de demonstração</summary><p>Dados fictícios para conhecer a plataforma.</p><div class="demo-grid">
         ${[['tecnico.capital','Técnico','Capital · Barra'],['tecnico.interior','Técnico','Interior · Niterói'],['supervisor.capital','Supervisor','Capital · Barra'],['supervisor.interior','Supervisor','Interior · Niterói'],['administrativo','Administrativo / RH','Todas as zonas']].map(([login,role,zone])=>`<button type="button" class="demo-button" data-action="demo-login" data-login="${login}">${icon(role==='Supervisor'?'UserRoundCog':'Wrench',18)}<span><strong>${role}</strong><small>${zone}</small></span></button>`).join('')}
       </div><p class="demo-password">Senha local: <code>tk2026</code></p></details>`:''}
-      <div class="login-security">${icon('ShieldCheck',15)}<span>Acesso para equipes de campo e gestão</span></div>
+      <a class="client-portal-link" href="/cliente.html">Acessar o portal do cliente</a><div class="login-security">${icon('ShieldCheck',15)}<span>Acesso para equipes de campo e gestão</span></div>
     </div></div>
   </section>`;
 }
 export function renderSidebar(){
   const pending=state.chamados.filter(c=>['aberto','em_andamento'].includes(c.status)).length;
-  const links=section=>Object.entries(routes).filter(([,r])=>r.section===section&&(!r.supervisor||isSupervisor())).map(([key,r])=>`<a href="#${key}" data-route="${key}" class="nav-link ${state.ui.route===key?'is-active':''}" ${state.ui.route===key?'aria-current="page"':''} aria-label="${r.label}" title="${r.label}">${icon(r.icon,19)}<span>${r.label}</span>${key==='chamados'&&pending?`<span class="nav-count">${pending}</span>`:''}</a>`).join('');
-  return `<a class="brand" href="#dashboard" data-route="dashboard">${brandMark()}<span class="brand__words">FieldIQ<span class="sidebar__subtitle">GESTÃO DE OPERAÇÕES</span></span></a>
+  const links=section=>Object.entries(routes).filter(([,r])=>r.section===section&&(!r.supervisor||isSupervisor())).map(([key,r])=>`<a href="#${key}" data-route="${key}" class="nav-link ${state.ui.route===key?'is-active':''}" ${state.ui.route===key?'aria-current="page"':''} aria-label="${r.label}" title="${r.label}">${icon(r.icon,19)}<span>${r.label}</span>${key==='chamados'&&pending?`<span class="nav-count">${pending}</span>`:''}${key==='solicitacoes'&&state.solicitacoes.some(s=>s.status==='aguardando_triagem')?`<span class="nav-count">${state.solicitacoes.filter(s=>s.status==='aguardando_triagem').length}</span>`:''}</a>`).join('');
+  return `<a class="brand" href="#dashboard" data-route="dashboard" aria-label="FieldIQ — visão geral">${brandMark()}<span class="brand__words">FieldIQ<span class="sidebar__subtitle">GESTÃO DE OPERAÇÕES</span></span></a>
     <nav class="sidebar-nav">${['Operação','Gestão','Sistema'].map(s=>`<div class="nav-section"><p class="nav-section__label">${s}</p>${links(s)}</div>`).join('')}</nav>
     <div class="sidebar-context"><div class="sidebar-context__title">${icon('MapPin',16)}Sua equipe</div><p>${esc(isAdmin()?'Todas as zonas':zoneName(state.user.zona_id))}</p></div>
     <div class="sidebar-account"><button class="sidebar-account__profile" type="button" data-route="perfil">${avatar(state.user)}<span class="sidebar-account__words"><span class="sidebar-account__name">${esc(state.user.nome)}</span><span class="sidebar-account__role">${esc(roleName(state.user.role))}</span></span></button>${iconButton('LogOut','Sair da conta','logout')}</div>`;

@@ -8,7 +8,8 @@ export function integer(value,label,min=1,max=2147483647){const n=Number(value);
 export function oneOf(value,values,label){insist(values.includes(value),400,label+' inválido.');return value;}
 export const isAdmin=user=>user.role==='administrativo';
 export const manages=user=>['supervisor','administrativo'].includes(user.role);
-export const canEdit=(user,ticket)=>isAdmin(user)||(user.role==='supervisor'?ticket.zona_id===user.zona_id:ticket.tecnico_matricula===user.matricula);
+export const canClose=(user,ticket)=>isAdmin(user)||(user.role==='supervisor'?ticket.zona_id===user.zona_id:ticket.tecnico_matricula===user.matricula);
+export const canEdit=(user,ticket)=>canClose(user,ticket)||(user.role==='tecnico'&&['aberto','em_andamento'].includes(ticket.status)&&canReadZone(user,ticket.zona_id)&&ticket.equipe_matriculas?.includes(user.matricula));
 export const canReadZone=(user,zone)=>isAdmin(user)||(Boolean(user.zona_id)&&user.zona_id===zone);
 export const scopeParams=user=>[isAdmin(user),user.zona_id];
 export function supervisor(user){insist(manages(user),403,'Ação exclusiva da gestão.');}

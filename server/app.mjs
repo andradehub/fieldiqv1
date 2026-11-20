@@ -4,11 +4,12 @@ import { createHash } from 'node:crypto';
 import { publicPerson, verifyPassword, readToken, hashToken, newToken } from './auth.mjs';
 import { projectRoot, schemaSQL } from './db.mjs';
 import { suggestForTicket } from './ai.mjs';
-import {ApiError,insist,text,optionalText,oneOf,integer,supervisor,canEdit,getTicket,isAdmin,manages,canReadZone,scopeParams} from './permissions.mjs';
+import {ApiError,insist,text,optionalText,oneOf,integer,supervisor,canEdit,canClose,getTicket,isAdmin,manages,canReadZone,scopeParams} from './permissions.mjs';
 import {registerUserRoutes} from './users.mjs';
 import {registerAttachmentRoutes} from './attachments.mjs';
 import {registerAttendanceRoutes,closeIntervals,beginInterval} from './attendance.mjs';
 import {registerMigrationRoutes} from './migration.mjs';
+import {registerPortalRoutes,internalRequests} from './portal.mjs';
 
 export {ApiError};
 async function equipment(db, id, user) {
@@ -64,6 +65,7 @@ const tableQueries = {
   sugestoes_ia: 'SELECT s.* FROM sugestoes_ia s JOIN vw_chamados_metricas c ON c.id=s.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
   avaliacoes_ia: 'SELECT a.* FROM avaliacoes_ia a JOIN sugestoes_ia s ON s.id=a.sugestao_id JOIN vw_chamados_metricas c ON c.id=s.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
   atendimentos: 'SELECT a.* FROM atendimentos a JOIN vw_chamados_metricas c ON c.id=a.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
+  equipe_chamado: 'SELECT e.* FROM equipe_chamado e JOIN vw_chamados_metricas c ON c.id=e.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
   anexos_chamados: 'SELECT a.id,a.chamado_id,a.usuario_matricula,a.nome,a.tipo,a.tamanho,a.sha256,a.criado_em FROM anexos_chamados a JOIN vw_chamados_metricas c ON c.id=a.chamado_id WHERE ($1::boolean OR c.zona_id=$2)'
 };
 function sqlValue(value) {
@@ -83,7 +85,7 @@ export async function exportDomainSQL(db, user={role:'administrativo'}) {
       const keys = Object.keys(row);
       sql += 'INSERT INTO ' + table + ' (' + keys.join(',') + ') VALUES (' + keys.map(k => sqlValue(row[k])).join(',') + ') ON CONFLICT DO NOTHING;\n';
     }
-    if (!['zonas','pessoas'].includes(table)) sql += "SELECT setval(pg_get_serial_sequence('" + table + "','id'), COALESCE((SELECT max(id) FROM " + table + "),1), EXISTS(SELECT 1 FROM " + table + "));\n";
+    if (!['zonas','pessoas','equipe_chamado'].includes(table)) sql += "SELECT setval(pg_get_serial_sequence('" + table + "','id'), COALESCE((SELECT max(id) FROM " + table + "),1), EXISTS(SELECT 1 FROM " + table + "));\n";
   }
   return sql + 'COMMIT;\n';
 }
@@ -143,7 +145,11 @@ export function createApp(db) {
     await db.query('DELETE FROM sessoes WHERE token_hash=$1',[hashToken(readToken(req))]);
     res.clearCookie('fieldiq_session',{...cookieOptions,maxAge:undefined}).json({ok:true});
   });
+  api.use((req,_res,next)=>{
+    insist(req.user.role!=='cliente'||req.path==='/bootstrap'||req.path.startsWith('/portal/'),403,'Use o portal do cliente para acessar seus imóveis e solicitações.');next();
+  });
   api.get('/bootstrap',async (req,res) => {
+    if(req.user.role==='cliente'){res.json({user:req.user,portal:true});return;}
     const params = scopeParams(req.user);
     const [zones,people,places,lifts,tickets,history,imports] = await Promise.all([
       db.query(tableQueries.zonas+' ORDER BY id',params),
@@ -154,7 +160,7 @@ export function createApp(db) {
       db.query('SELECT h.*,p.nome AS usuario,p.matricula FROM historico_chamados h JOIN pessoas p ON p.matricula=h.usuario_matricula JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE ($1::boolean OR c.zona_id=$2) ORDER BY h.data,h.id',params),
       manages(req.user) ? db.query('SELECT * FROM importacoes WHERE usuario_matricula=$1 ORDER BY data DESC LIMIT 50',[req.user.matricula]) : {rows:[]}
     ]);
-    res.json({user:req.user,zonas:zones.rows,pessoas:people.rows,locais:places.rows,elevadores:lifts.rows,chamados:tickets.rows.map(c => ({...c,historico:history.rows.filter(h => h.chamado_id === c.id)})),importacoes:imports.rows});
+    res.json({user:req.user,zonas:zones.rows,pessoas:people.rows,locais:places.rows,elevadores:lifts.rows,chamados:tickets.rows.map(c => ({...c,historico:history.rows.filter(h => h.chamado_id === c.id)})),importacoes:imports.rows,solicitacoes:manages(req.user)?await internalRequests(db,req.user):[]});
   });
   api.post('/chamados',async (req,res) => {
     supervisor(req.user);
@@ -169,7 +175,8 @@ export function createApp(db) {
       const supervisorRole = manages(req.user);
       const allowed = supervisorRole ? ['descricao','solucao','status','tipo_obra','prioridade','sla_horas','tecnico','revisao'] : ['descricao','solucao','status','revisao'];
       insist(Object.keys(req.body).every(k => allowed.includes(k)),403,'Alteração não permitida para seu perfil.');
-      const status = oneOf(req.body.status ?? c.status,statuses,'Status');
+      let status = oneOf(req.body.status ?? c.status,statuses,'Status');
+      insist(canClose(req.user,c)||status===c.status,403,'Apenas o responsável principal ou a gestão altera o status global. Use Iniciar/Pausar para registrar seu período.');
       if (!supervisorRole) {
         insist(status !== 'cancelado' && !(c.status === 'resolvido' && status !== 'resolvido') && c.status !== 'cancelado',403,'Apenas o supervisor pode reabrir ou cancelar chamados.');
       }
@@ -180,6 +187,9 @@ export function createApp(db) {
       const priority = oneOf(req.body.prioridade ?? c.prioridade,priorities,'Prioridade');
       const sla = integer(req.body.sla_horas ?? c.sla_horas,'SLA',1,8760);
       const tech = 'tecnico' in req.body ? await technician(tx,req.body.tecnico,c.zona_id) : c.tecnico_matricula;
+      insist(!(tech!==c.tecnico_matricula&&['resolvido','cancelado'].includes(c.status)&&status===c.status),409,'Reabra o chamado antes de alterar seu responsável.');
+      if(!tech&&['aberto','em_andamento'].includes(status))status='aberto';
+      if(tech!==c.tecnico_matricula&&c.tecnico_matricula)await tx.query('DELETE FROM equipe_chamado WHERE chamado_id=$1 AND tecnico_matricula=$2',[c.id,c.tecnico_matricula]);
       if(c.atendimento_ativo_desde&&(status!=='em_andamento'||tech!==c.tecnico_matricula))await closeIntervals(tx,c.id);
       if(status==='em_andamento'&&c.status!=='em_andamento'&&tech){await beginInterval(tx,{...c,tecnico_matricula:tech},req.user);}
       const closed = status === 'resolvido' ? (c.resolvido_em ?? new Date().toISOString()) : null;
@@ -287,6 +297,7 @@ export function createApp(db) {
   registerAttachmentRoutes(api,db);
   registerAttendanceRoutes(api,db);
   registerMigrationRoutes(api,db,insertTicket);
+  registerPortalRoutes(api,db,insertTicket);
   api.use((_req,res) => res.status(404).json({error:'Rota não encontrada.'}));
   app.get('/vendor/chart.umd.js',(_req,res) => res.sendFile(path.join(projectRoot,'node_modules/chart.js/dist/chart.umd.js')));
   app.get('/vendor/lucide.js',(_req,res) => res.sendFile(path.join(projectRoot,'node_modules/lucide/dist/umd/lucide.min.js')));

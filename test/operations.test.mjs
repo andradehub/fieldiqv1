@@ -56,7 +56,7 @@ test('cadastro persiste dados e senha protegida; supervisor cria só técnico na
   assert.equal((await call('/usuarios',{method:'POST',body:{...person,matricula:'INVALID-ADM',role:'administrativo'}})).status,403);
 });
 test('Administrativo cadastra supervisor em outra região; transferência preserva pendências e revoga sessões',async()=>{
-  assert.equal((await call('/usuarios',{method:'POST',body:{...person,cpf:'11144477735',matricula:'SUP-TEST',login:'supervisor.teste',role:'supervisor',zona_id:'int-02',email:'sup@example.com'}})).status,201);
+  assert.equal((await call('/usuarios',{method:'POST',body:{...person,cpf:'11144477735',matricula:'SUP-TEST',login:'supervisor.teste',role:'supervisor',cargo:'Supervisor de operações',zona_id:'int-02',email:'sup@example.com'}})).status,201);
   assert.equal((await call('/usuarios/TK-CAP-001',{method:'PATCH',body:{zona_id:'cap-02'}})).status,409);
   assert.equal((await call('/usuarios/'+person.matricula,{method:'PATCH',body:{zona_id:'int-01'}})).status,200);
   assert.equal((await call('/bootstrap',{cookie:await login(person.login,person.senha)})).data.user.zona_id,'int-01');
@@ -126,7 +126,7 @@ test('migração de esquema preserva banco da versão anterior e não reaplica a
   await old.exec(await readFile(path.join(projectRoot,'database/001-schema.sql'),'utf8'));
   await old.query("INSERT INTO pessoas(matricula,nome,role,cargo,regiao) VALUES ('OLD-001','Usuário existente','tecnico','Técnico','capital')");await old.close();
   let upgraded=await createDatabase({dataDir:folder,demo:false});assert.equal((await upgraded.query("SELECT nome FROM pessoas WHERE matricula='OLD-001'")).rows[0].nome,'Usuário existente');await upgraded.close();
-  upgraded=await createDatabase({dataDir:folder,demo:false});try{assert.equal((await upgraded.query('SELECT * FROM schema_migrations')).rows.length,2);}finally{await upgraded.close();}
+  upgraded=await createDatabase({dataDir:folder,demo:false});try{assert.equal((await upgraded.query('SELECT * FROM schema_migrations')).rows.length,5);}finally{await upgraded.close();}
 });
 test('CSV de sistema anterior é convertido com campos, valores e padrões mapeados; CLI funciona em caminho com espaços',async()=>{
   const folder=await mkdtemp(path.join(projectRoot,'test-results','csv legado '));

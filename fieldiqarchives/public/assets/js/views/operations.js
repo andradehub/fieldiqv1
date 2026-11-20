@@ -1,4 +1,4 @@
-import {state,isSupervisor,isAdmin,roleName,regionName,zoneName,personName} from '../core/state.js';
+import {state,isSupervisor,isAdmin,roleName,regionName,zoneName,personName,isOnTicket} from '../core/state.js';
 import {esc,fmtTime,average,percent} from '../core/format.js';
 import {icon,heading,button,avatar,badge,metricCard,panelHeader,options,emptyState,notice} from '../components/ui.js';
 export function renderAssets(){
@@ -20,11 +20,11 @@ export function renderAssets(){
 }
 export function renderTeam(){
   const people=state.pessoas.filter(p=>p.role==='tecnico');
-  return heading('GESTÃO DE PESSOAS','Equipe de campo','Colaboradores e carga de atendimento da sua área.',isSupervisor()?button('Gerenciar usuários',{route:'usuarios',name:'UserRoundCog',tone:'primary'}):'')+`<section class="panel">${panelHeader(isAdmin()?'Todas as equipes':'Equipe da zona',isAdmin()?'Visão geral das zonas':zoneName(state.user.zona_id))}<div class="team-cards">${people.map(p=>{const calls=state.chamados.filter(c=>c.tecnico===p.matricula&&c.status!=='cancelado'),closed=calls.filter(c=>c.status==='resolvido');return `<article class="team-card">${avatar(p)}<div><h3>${esc(p.nome)}</h3><p>${esc(p.cargo)}</p><span>${esc(zoneName(p.zona_id))}</span>${badge(p.ativo?'Ativo':'Inativo',p.ativo?'green':'neutral')}</div><dl><div><dt>Pendentes</dt><dd>${calls.length-closed.length}</dd></div><div><dt>Resolução</dt><dd>${percent(closed.length,calls.length)??'—'}${calls.length?'%':''}</dd></div><div><dt>Tempo médio</dt><dd>${fmtTime(average(closed.map(c=>c.tempo_resolucao_min)))}</dd></div></dl>${button('Ver chamados',{action:'person-tickets',attrs:'data-registration="'+esc(p.matricula)+'"',tone:'quiet'})}</article>`;}).join('')||emptyState('Nenhum técnico cadastrado','Cadastre colaboradores na Gestão de usuários.',{name:'UsersRound'})}</div></section>`;
+  return heading('GESTÃO DE PESSOAS','Equipe de campo','Colaboradores e carga de atendimento da sua área.',isSupervisor()?button('Gerenciar usuários',{route:'usuarios',name:'UserRoundCog',tone:'primary'}):'')+`<section class="panel">${panelHeader(isAdmin()?'Todas as equipes':'Equipe da zona',isAdmin()?'Visão geral das zonas':zoneName(state.user.zona_id))}<div class="team-cards">${people.map(p=>{const calls=state.chamados.filter(c=>isOnTicket(c,p.matricula)&&c.status!=='cancelado'),closed=calls.filter(c=>c.status==='resolvido');return `<article class="team-card">${avatar(p)}<div><h3>${esc(p.nome)}</h3><p>${esc(p.cargo)}</p><span>${esc(zoneName(p.zona_id))}</span>${badge(p.ativo?'Ativo':'Inativo',p.ativo?'green':'neutral')}</div><dl><div><dt>Pendentes</dt><dd>${calls.length-closed.length}</dd></div><div><dt>Resolução</dt><dd>${percent(closed.length,calls.length)??'—'}${calls.length?'%':''}</dd></div><div><dt>Tempo médio</dt><dd>${fmtTime(average(closed.map(c=>c.tempo_resolucao_min)))}</dd></div></dl>${button('Ver chamados',{action:'person-tickets',attrs:'data-registration="'+esc(p.matricula)+'"',tone:'quiet'})}</article>`;}).join('')||emptyState('Nenhum técnico cadastrado','Cadastre colaboradores na Gestão de usuários.',{name:'UsersRound'})}</div></section>`;
 }
 export function renderProfile(){
   const user=state.user;
-  const calls=state.chamados.filter(c=>(isAdmin()|| (isSupervisor()?c.zona_id===user.zona_id:c.tecnico===user.matricula))&&c.status!=='cancelado');
+  const calls=state.chamados.filter(c=>(isAdmin()|| (isSupervisor()?c.zona_id===user.zona_id:isOnTicket(c,user.matricula)))&&c.status!=='cancelado');
   const closed=calls.filter(c=>c.status==='resolvido');
   const rate=percent(closed.length,calls.length);
   return heading('MINHA CONTA','Meu perfil','Suas informações profissionais e seu contexto de atuação.')+`
