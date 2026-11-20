@@ -2,6 +2,14 @@
 
 Este histórico registra o problema que motivou cada entrega e seu efeito na aplicação. Os commits publicados mantêm seus identificadores; as explicações abaixo complementam suas mensagens.
 
+## 2026-11-20 — espaçamento da nova solicitação no portal
+
+**Motivo:** detalhes do problema, aviso de encaminhamento e botão de envio apareciam encostados. A classe de organização do formulário estava definida apenas no CSS do painel interno, que não é carregado pelo portal do cliente.
+
+**Alterações:** o CSS do próprio portal organiza o formulário em grade com 24 px entre blocos, sem margem adicional no aviso. O botão de envio tem altura mínima de 44 px e ocupa a largura disponível no celular. O ajuste é restrito ao formulário de nova solicitação.
+
+**Verificação:** medidos 24 px entre detalhes/aviso e aviso/botão no Edge em 320, 390, 768 e 1440 px e no WebKit em 390 px, sem rolagem horizontal e com cinco verificações axe sem violações. Capturas locais do formulário revisadas; build e diff conferidos. Nenhuma solicitação foi enviada durante essa verificação visual.
+
 ## 2026-11-20 — importação unificada com revisão dos registros
 
 **Motivo:** “Importar uma base completa” e “Importar um arquivo” levavam ao mesmo resultado para o JSON de demonstração, mas sugeriam operações distintas. O responsável pediu uma única área e a possibilidade de conferir o conteúdo incluído antes de gravar.

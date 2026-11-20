@@ -263,6 +263,8 @@ O cliente não acessa anexos internos. A IA atual não lê fotos ou documentos a
 
 O portal `/cliente.html` possui layout e dados próprios: locais vinculados, elevadores, solicitações pendentes, atendimentos concluídos e formulário de nova solicitação. Não mostra indicadores de funcionários ou diretório interno.
 
+O formulário de nova solicitação mantém espaçamento uniforme entre campos, aviso de encaminhamento e botão de envio. No celular, o botão usa a largura disponível para facilitar o toque.
+
 ### Cadastro e vínculo
 
 O Administrativo cria o perfil Cliente na Gestão de usuários e marca os locais autorizados. Não há cadastro público. A conta pode estar vinculada a mais de um local, inclusive em zonas diferentes. O cliente acompanha solicitações **da própria conta**, dentro dos locais atualmente vinculados.
