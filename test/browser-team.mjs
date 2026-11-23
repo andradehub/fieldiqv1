@@ -1,0 +1,30 @@
+import {once} from 'node:events';
+import {mkdir} from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {chromium} from 'playwright';
+import {createDatabase,projectRoot} from '../server/db.mjs';
+import {createApp} from '../server/app.mjs';
+const db=await createDatabase({dataDir:'memory://',demo:true}),server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');
+const base='http://127.0.0.1:'+server.address().port,browser=await chromium.launch({channel:'msedge',headless:true}),output=path.join(projectRoot,'test-results','followups');await mkdir(output,{recursive:true});
+async function nav(page,route){await page.locator('#sidebar [data-route="'+route+'"]').click();}
+async function enter(login){const context=await browser.newContext({viewport:{width:1440,height:1000}}),page=await context.newPage();await page.goto(base);await page.locator('#login-user').fill(login);await page.locator('#login-pass').fill('tk2026');await page.locator('#login-submit').click();await page.locator('#page-title').waitFor();return {context,page};}
+const errors=[];
+try{
+ const admin=await enter('administrativo');admin.page.on('pageerror',e=>errors.push(e.message));await nav(admin.page,'usuarios');await admin.page.locator('[data-action="user-open"]').first().click();await admin.page.locator('#user-role').selectOption('cliente');await admin.page.locator('#user-name').fill('Cliente cadastrado na interface');await admin.page.locator('#user-registration').fill('CLIENTE-UI');await admin.page.locator('#user-login').fill('cliente.interface');await admin.page.locator('#user-password').fill('senha-cliente-interface');await admin.page.locator('[name="locais_ids"][value="1"]').check();await admin.page.locator('[data-form="user"] button[type="submit"]').click();await admin.page.locator('#utility-dialog').waitFor({state:'hidden'});
+ const clientContext=await browser.newContext(),client=await clientContext.newPage();client.on('pageerror',e=>errors.push(e.message));await client.goto(base);await client.locator('#login-user').fill('cliente.interface');await client.locator('#login-pass').fill('senha-cliente-interface');await client.locator('#login-submit').click();await client.waitForURL('**/cliente.html');await client.locator('.client-welcome').waitFor();assert.match(await client.locator('.client-header').innerText(),/Cliente cadastrado/);assert.equal(await client.locator('.client-assets article').count(),1);
+ const created=await admin.page.request.post(base+'/api/chamados',{data:{titulo:'Ana e Carlos em equipe',elevador_id:1,tecnico:'TK-CAP-002',sla_horas:1}});const id=(await created.json()).id;await db.query("UPDATE chamados SET aberto_em=now()-interval '2 hours' WHERE id=$1",[id]);
+ const ana=await enter('ana.capital'),carlos=await enter('tecnico.capital');ana.page.on('pageerror',e=>errors.push(e.message));carlos.page.on('pageerror',e=>errors.push(e.message));
+ for(const page of [ana.page,carlos.page]){await nav(page,'chamados');await page.locator('#ticket-search').fill('Ana e Carlos');await page.locator('[data-action="open-ticket"][data-id="'+id+'"]').click();}
+ await ana.page.locator('[data-action="attendance-start"]').click();await ana.page.locator('[data-action="attendance-pause"]').waitFor();
+ await carlos.page.locator('[data-action="ticket-join"]').click();await carlos.page.locator('[data-action="attendance-start"]').click();await carlos.page.locator('[data-action="attendance-pause"]').waitFor();
+ const team=carlos.page.locator('.ticket-team');assert.match(await team.innerText(),/Ana Ferreira/);assert.match(await team.innerText(),/Carlos Mendes/);assert.equal(await carlos.page.locator('[data-action="attendance-finish"]').count(),0);
+ await team.scrollIntoViewIfNeeded();await carlos.page.screenshot({path:path.join(output,'equipe-ana-carlos.png')});
+ await ana.page.locator('[data-action="attendance-finish"]').click();await ana.page.locator('#ed-solucao').fill('Solução fictícia registrada pela responsável com apoio de Carlos.');await ana.page.locator('#ticket-save').click();await ana.page.locator('#toast').filter({hasText:'preservados'}).waitFor();assert.equal(await ana.page.locator('#ed-solucao').inputValue(),'Solução fictícia registrada pela responsável com apoio de Carlos.');await ana.page.locator('#ticket-save').click();await ana.page.locator('#ticket-dialog').waitFor({state:'hidden'});
+ const row=(await db.query('SELECT * FROM vw_chamados_metricas WHERE id=$1',[id])).rows[0];assert.equal(row.status,'resolvido');assert.equal(row.sla_cumprido,false);assert.equal(row.tecnico_matricula,'TK-CAP-002');assert.equal((await db.query('SELECT id FROM atendimentos WHERE chamado_id=$1 AND encerrado_em IS NULL',[id])).rows.length,0);
+ const unassigned=await admin.page.request.post(base+'/api/chamados',{data:{titulo:'Chamado para assumir e liberar',elevador_id:1}});const next=(await unassigned.json()).id;
+ await carlos.page.reload();await carlos.page.locator('#page-title').waitFor();await carlos.page.locator('#ticket-search').fill('Chamado para assumir');await carlos.page.locator('[data-action="open-ticket"][data-id="'+next+'"]').click();await carlos.page.locator('[data-action="ticket-claim"]').click();await carlos.page.locator('[data-action="attendance-start"]').click();await carlos.page.locator('[data-action="attendance-pause"]').waitFor();await carlos.page.locator('[data-action="ticket-release"]').click();await carlos.page.locator('[data-action="ticket-claim"]').waitFor();
+ const released=(await db.query('SELECT status,tecnico_matricula,resolvido_em FROM chamados WHERE id=$1',[next])).rows[0];assert.equal(released.status,'aberto');assert.equal(released.tecnico_matricula,null);assert.equal(released.resolvido_em,null);
+ assert.deepEqual(errors,[]);console.log('Cadastro de cliente, redirecionamento ao portal e equipe Ana/Carlos com preservação de texto em conflito verificados.');
+ await clientContext.close();await admin.context.close();await ana.context.close();await carlos.context.close();
+}finally{await browser.close();await new Promise(r=>server.close(r));await db.close();}

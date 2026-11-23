@@ -1,0 +1,13 @@
+{
+  "formato": "fieldiq-legado-v1",
+  "origem": "Sistema anterior — exemplo fictício",
+  "zonas": [{"id":"z4","codigo":"cap-04","regiao":"capital","nome":"Zona 04","local":"Barra da Tijuca"}],
+  "pessoas": [{"id":"t100","matricula":"LEG-100","nome":"Renato Lima — fictício","role":"tecnico","cargo":"Técnico de manutenção","zona_id":"z4","email":"renato@example.com","telefone":"(21) 00000-0000"}],
+  "locais": [{"id":"predio12","nome":"Edifício legado — fictício","endereco":"Rua de demonstração, 12","bairro":"Barra da Tijuca","zona_id":"z4"}],
+  "elevadores": [{"id":"eq88","codigo":"LEG-BAR-088","local_id":"predio12","fabricante":"Fabricante demonstrativo","modelo":"Modelo legado","numero_serie":"DEMO-LEG-088","capacidade_kg":750}],
+  "chamados": [
+    {"id":"os501","elevador_id":"eq88","tecnico_id":"t100","titulo":"Porta interrompe fechamento — histórico migrado","descricao":"Registro fictício do sistema anterior: sensor da porta com funcionamento intermitente.","tipo_obra":"mod_parcial","prioridade":"alta","status":"resolvido","sla_horas":24,"aberto_em":"2026-01-10T09:00:00-03:00","iniciado_em":"2026-01-10T10:00:00-03:00","resolvido_em":"2026-01-10T11:30:00-03:00","solucao":"Solução fictícia: diagnóstico e correção documentados pela equipe no sistema anterior."},
+    {"id":"os502","elevador_id":"eq88","titulo":"Inspeção pendente — registro migrado","descricao":"Solicitação fictícia ainda aberta na origem, sem responsável atribuído.","tipo_obra":"mod_parcial","prioridade":"media","status":"aberto","sla_horas":48,"aberto_em":"2026-01-12T09:00:00-03:00"}
+  ],
+  "historicos": [{"id":"h501","chamado_id":"os501","usuario_id":"t100","alteracao":"Registro fictício: equipe iniciou a inspeção no sistema anterior.","data":"2026-01-10T10:00:00-03:00"}]
+}
