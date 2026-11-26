@@ -4,7 +4,6 @@ import {state} from '../fieldiqarchives/public/assets/js/core/state.js';
 import {dashboardData} from '../fieldiqarchives/public/assets/js/views/dashboard.js';
 import {filteredTickets} from '../fieldiqarchives/public/assets/js/views/tickets.js';
 import {weekKey,fmtTime,average} from '../fieldiqarchives/public/assets/js/core/format.js';
-import {parseCSV,normalizeRow} from '../fieldiqarchives/public/assets/js/core/import.js';
 
 test('indicadores usam o recorte de abertura e excluem cancelados da resolução',()=>{
   const iso=days=>new Date(Date.now()-days*86400000).toISOString();
@@ -31,11 +30,7 @@ test('busca e filtros combinados preservam a identificação por equipamento',()
   state.ui.filters={search:'BOT-001'};
   assert.deepEqual(filteredTickets().map(c=>c.id),[2]);
 });
-test('CSV da prévia preserva aspas, quebras de linha e datas de planilha',()=>{
-  const rows=parseCSV('titulo;elevador_codigo;descricao\n"Porta; térreo";BAR-001;"Falha\nintermitente"\n');
-  assert.equal(rows[0].titulo,'Porta; térreo');
-  assert.equal(rows[0].descricao,'Falha\nintermitente');
-  assert.equal(normalizeRow({abertura:new Date('2026-01-01T12:00:00Z')}).aberto_em,'2026-01-01T12:00:00.000Z');
+test('agrupamento semanal distingue anos e tempos iguais a zero são preservados',()=>{
   assert.notEqual(weekKey('2025-01-10T12:00:00Z'),weekKey('2026-01-10T12:00:00Z'));
   assert.equal(fmtTime(average([0,0])),'0 min');
 });

@@ -2,6 +2,8 @@
 
 Data: 19/11/2026.
 
+Nota de escopo de 26/11/2026: a importação foi retirada da versão final. As observações sobre ela descrevem a etapa histórica de pesquisa; a arquitetura e os fluxos atuais não incluem esse módulo.
+
 ## Escopo e método
 
 Esta etapa prioriza o redesign solicitado: manter roxo e laranja, melhorar leitura e arquitetura da interface e adaptar os fluxos a computador, celular e tablet.
@@ -109,7 +111,7 @@ Esses indicadores não foram adicionados como números fictícios ao painel.
 | Novo chamado | Três etapas com revisão e contexto do equipamento, sem expor todo o formulário ao mesmo tempo. |
 | Elevadores / locais | Consulta em primeiro plano; cadastros abertos sob demanda e histórico acessível por equipamento. |
 | Equipe | Volume de atendimento e filtros claros; sem classificação simplista por cor de “bom” ou “ruim”. |
-| Importação | Área de arquivo, prévia, campos necessários e relatório de linhas ignoradas. |
+| Escopo final | Importação retirada em 26/11/2026; a versão atual mantém os cadastros e atendimentos feitos na aplicação. |
 | Banco | Catálogo de tabelas, busca nos registros, estrutura sob demanda e rolagem confinada à tabela. |
 | Perfil | Identidade, vínculo profissional e indicadores associados à atuação. |
 
@@ -122,7 +124,6 @@ assets/js/
     state.js             estado, perfis e contexto
     api.js               comunicação HTTP e erros
     format.js            datas, tempos e cálculos de apresentação
-    import.js            leitura e normalização de arquivos
   components/ui.js       ícones, badges, botões, cabeçalhos e estados vazios
   views/
     shell.js             login e navegação
@@ -130,7 +131,6 @@ assets/js/
     tickets.js           listagem, detalhes e assistente
     forms.js             chamado e cadastros
     operations.js        equipamentos, equipe e perfil
-    imports.js           importação e resultados
     database.js          consulta ao banco
 assets/css/
   tokens.css             identidade, tipografia e regras básicas

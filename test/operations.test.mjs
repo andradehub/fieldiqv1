@@ -8,9 +8,6 @@ import {createApp,exportDomainSQL} from '../server/app.mjs';
 import {dashboardData} from '../fieldiqarchives/public/assets/js/views/dashboard.js';
 import {state} from '../fieldiqarchives/public/assets/js/core/state.js';
 import {validCPF} from '../server/users.mjs';
-import {convertFolder} from '../scripts/convert-legacy.mjs';
-import {writeFile} from 'node:fs/promises';
-import {execFileSync} from 'node:child_process';
 let db,server,base,admin,supervisor,tech,ana,interior;
 async function call(route,{cookie=admin,body,method='GET',bytes,name}={}){
   const r=await fetch(base+'/api'+route,{method,headers:{cookie,...(body?{'Content-Type':'application/json'}:{}),...(bytes?{'Content-Type':'application/octet-stream','X-File-Name':encodeURIComponent(name)}:{})},body:bytes??(body?JSON.stringify(body):undefined)});
@@ -98,22 +95,6 @@ test('início, pausa, retomada, conclusão e reabertura mantêm SLA, tempos e ta
   state.chamados=(await call('/bootstrap',{cookie:supervisor})).data.chamados;metrics=dashboardData();assert.ok(!metrics.resolved.some(c=>c.id===id));assert.ok(metrics.pending.some(c=>c.id===id));
   row=(await db.query('SELECT * FROM vw_chamados_metricas WHERE id=$1',[id])).rows[0];assert.equal(row.resolvido_em,null);assert.equal(row.sla_cumprido,null);assert.ok(row.sla_vencido);assert.equal(Number(row.tempo_atendimento_seg),beforeTime);
 });
-test('migração valida sem gravar, importa todos os vínculos e datas atomicamente e evita reimportação',async()=>{
-  const pacote=JSON.parse(await readFile(path.join(projectRoot,'fieldiqarchives/public/exemplo-migracao.json'),'utf8'));
-  const post=(p,confirmar)=>call('/migracoes',{method:'POST',body:{pacote:p,confirmar}});
-  assert.equal((await call('/migracoes',{cookie:supervisor,method:'POST',body:{pacote,confirmar:false}})).status,403);
-  let r=await post(pacote,false);assert.equal(r.status,200);assert.equal(r.data.resumo.criados.chamados,2);
-  assert.equal((await db.query("SELECT matricula FROM pessoas WHERE matricula='LEG-100'")).rows.length,0);
-  assert.equal((await db.query('SELECT * FROM referencias_legado')).rows.length,0);
-  const invalid=structuredClone(pacote);invalid.historicos[0].chamado_id='inexistente';assert.equal((await post(invalid,true)).status,400);
-  assert.equal((await db.query("SELECT matricula FROM pessoas WHERE matricula='LEG-100'")).rows.length,0);
-  r=await post(pacote,true);assert.equal(r.status,200);assert.ok(r.data.importado);
-  const c=(await db.query("SELECT * FROM vw_chamados_metricas WHERE elevador_codigo='LEG-BAR-088' AND status='resolvido'")).rows[0];
-  assert.equal(c.tecnico_matricula,'LEG-100');assert.equal(c.zona_id,'cap-04');assert.equal(new Date(c.aberto_em).toISOString(),'2026-01-10T12:00:00.000Z');assert.equal(c.tempo_resolucao_min,150);assert.equal(c.sla_cumprido,true);assert.equal(Number(c.tempo_atendimento_seg),0);
-  assert.equal((await db.query("SELECT ativo FROM pessoas WHERE matricula='LEG-100'")).rows[0].ativo,false);
-  assert.ok((await post(pacote,true)).data.ja_importado);
-  const changed=structuredClone(pacote);changed.locais[0].nome='Tentativa de sobrescrever';assert.equal((await post(changed,true)).status,409);
-});
 test('exportação de domínio restaura estrutura e vínculos sem divulgar CPF ou credenciais',async()=>{
   const sql=await exportDomainSQL(db,{role:'supervisor',zona_id:'cap-04'});
   assert.ok(!sql.includes('52998224725'));assert.ok(!sql.includes(person.senha));assert.ok(!sql.includes('scrypt:'));assert.ok(!sql.includes('pessoa@example.com'));
@@ -127,14 +108,4 @@ test('migração de esquema preserva banco da versão anterior e não reaplica a
   await old.query("INSERT INTO pessoas(matricula,nome,role,cargo,regiao) VALUES ('OLD-001','Usuário existente','tecnico','Técnico','capital')");await old.close();
   let upgraded=await createDatabase({dataDir:folder,demo:false});assert.equal((await upgraded.query("SELECT nome FROM pessoas WHERE matricula='OLD-001'")).rows[0].nome,'Usuário existente');await upgraded.close();
   upgraded=await createDatabase({dataDir:folder,demo:false});try{assert.equal((await upgraded.query('SELECT * FROM schema_migrations')).rows.length,5);}finally{await upgraded.close();}
-});
-test('CSV de sistema anterior é convertido com campos, valores e padrões mapeados; CLI funciona em caminho com espaços',async()=>{
-  const folder=await mkdtemp(path.join(projectRoot,'test-results','csv legado '));
-  await writeFile(path.join(folder,'chamados.csv'),'NUM_OS;EQUIP;ASSUNTO;SITUACAO;DATA\n55;88;"Porta; sensor";F;2026-01-10T09:00:00-03:00\n','utf8');
-  const mapping={chamados:{colunas:{id:'NUM_OS',elevador_id:'EQUIP',titulo:'ASSUNTO',status:'SITUACAO',aberto_em:'DATA'},padroes:{sla_horas:24},valores:{status:{F:'resolvido'}}}};
-  const result=await convertFolder(folder,'Origem fictícia',mapping);
-  assert.equal(result.chamados[0].titulo,'Porta; sensor');assert.equal(result.chamados[0].status,'resolvido');assert.equal(result.chamados[0].elevador_id,'88');assert.equal(result.chamados[0].sla_horas,24);
-  await writeFile(path.join(folder,'mapping.json'),JSON.stringify(mapping));
-  execFileSync(process.execPath,[path.join(projectRoot,'scripts/convert-legacy.mjs'),folder,'Origem fictícia',path.join(folder,'pacote.json'),path.join(folder,'mapping.json')]);
-  assert.deepEqual(JSON.parse(await readFile(path.join(folder,'pacote.json'),'utf8')),result);
 });

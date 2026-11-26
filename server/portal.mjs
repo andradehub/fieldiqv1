@@ -51,7 +51,7 @@ export function registerPortalRoutes(api,db,insertTicket){
         const worker=(await tx.query("SELECT matricula FROM pessoas WHERE matricula=$1 AND role='tecnico' AND ativo AND zona_id=$2",[req.body.tecnico,s.zona_id])).rows[0];
         insist(worker,400,'Escolha um técnico ativo da zona da solicitação.');
       }
-      const call=await insertTicket(tx,{elevador_id:s.elevador_id,titulo:s.titulo,descricao:s.descricao,aberto_em:new Date(s.aberto_em).toISOString(),status:'aberto',tecnico:req.body.tecnico,prioridade:req.body.prioridade,sla_horas:req.body.sla_horas,tipo_obra:req.body.tipo_obra},req.user,true);
+      const call=await insertTicket(tx,{elevador_id:s.elevador_id,titulo:s.titulo,descricao:s.descricao,tecnico:req.body.tecnico,prioridade:req.body.prioridade,sla_horas:req.body.sla_horas,tipo_obra:req.body.tipo_obra},req.user,{openedAt:s.aberto_em});
       await tx.query("UPDATE solicitacoes_clientes SET status='aceita',triado_em=now(),triado_por=$1,chamado_id=$2,retorno='Solicitação aceita pela equipe de atendimento.' WHERE id=$3",[req.user.matricula,call,id]);
       await tx.query('INSERT INTO historico_chamados(chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)',[call,req.user.matricula,'Solicitação de cliente #'+id+' aceita. A abertura original foi preservada no SLA.']);return {id,chamado_id:call};
     });res.json(result);

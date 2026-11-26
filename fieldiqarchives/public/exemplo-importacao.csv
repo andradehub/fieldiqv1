@@ -1,3 +1,0 @@
-titulo;elevador_codigo;descricao;tipo_obra;prioridade;status;sla_horas;tecnico;aberto_em;resolvido_em;solucao
-Registro fictício importado — porta;BAR-001;Sensor de presença com acionamento intermitente;mod_parcial;alta;resolvido;24;TK-CAP-001;2026-11-01T10:00:00-03:00;2026-11-01T12:00:00-03:00;Registro fictício: diagnóstico e solução documentados pela equipe.
-Registro fictício importado — iluminação;BAR-002;Iluminação da cabine intermitente;mod_parcial;media;aberto;24;TK-CAP-002;2026-11-10T09:00:00-03:00;;

@@ -1,9 +1,6 @@
 import {state,routes,isSupervisor,isAdmin,acceptData,canEdit} from './core/state.js';
 import {api} from './core/api.js';
 import {esc} from './core/format.js';
-import {readImport} from './core/import.js';
-import {previewGroups} from './core/import-preview.js';
-import {renderPreviewCategory} from './views/import-preview.js';
 import {icon,button,slaBadge,options} from './components/ui.js';
 import {jobTitles} from './core/jobs.js';
 import {renderLogin,renderSidebar,renderTopbar,renderBottomNav} from './views/shell.js';
@@ -11,7 +8,6 @@ import {renderDashboard,mountCharts,disposeCharts} from './views/dashboard.js';
 import {renderTickets,renderTicketDialog,renderAi} from './views/tickets.js';
 import {renderNewTicket,renderNewContext,renderAssetDialog,renderTeamDialog} from './views/forms.js';
 import {renderAssets,renderTeam,renderProfile} from './views/operations.js';
-import {renderImports} from './views/imports.js';
 import {renderDatabase} from './views/database.js';
 import {renderUsers,renderUserDialog} from './views/users.js';
 import {renderRequests,renderReview} from './views/requests.js';
@@ -41,7 +37,7 @@ function updateJobChoices(){
 let databaseRequest=0;
 const freshFilters=()=>({search:'',status:'',priority:'',work:'',technician:'',equipment:'',flag:'',period:'all'});
 const freshTicket=()=>({step:1,titulo:'',descricao:'',elevador_id:'',tipo_obra:'mod_parcial',prioridade:'media',sla_horas:24,tecnico:''});
-const views={dashboard:renderDashboard,chamados:renderTickets,novochamado:renderNewTicket,elevadores:renderAssets,tecnicos:renderTeam,usuarios:renderUsers,solicitacoes:renderRequests,perfil:renderProfile,importacao:renderImports,banco:renderDatabase};
+const views={dashboard:renderDashboard,chamados:renderTickets,novochamado:renderNewTicket,elevadores:renderAssets,tecnicos:renderTeam,usuarios:renderUsers,solicitacoes:renderRequests,perfil:renderProfile,banco:renderDatabase};
 
 function toast(message){
   $('toast').textContent=message;
@@ -134,9 +130,9 @@ function showLogin(){
   $('ticket-dialog').close();$('utility-dialog').close();
   closeMenu(false);
   state.user=null;
-  for(const key of ['zonas','pessoas','locais','elevadores','chamados','importacoes','usuarios','solicitacoes'])state[key]=[];
+  for(const key of ['zonas','pessoas','locais','elevadores','chamados','usuarios','solicitacoes'])state[key]=[];
   state.ui.users={};
-  state.ui.ticket=null;state.ui.upload=null;state.ui.newTicket=freshTicket();state.ui.filters=freshFilters();
+  state.ui.ticket=null;state.ui.newTicket=freshTicket();state.ui.filters=freshFilters();
   databaseRequest++;
   Object.assign(state.ui.database,{info:null,data:null,search:'',error:null});
   $('app-shell').hidden=true;
@@ -266,21 +262,6 @@ function quickFilter(value){
   if(value==='unassigned'){f.flag='unassigned';f.status='pending';}
   navigate('chamados');
 }
-async function chooseFile(file){
-  if(!file)return;
-  const pending={file,reading:true,rows:null};
-  state.ui.upload=pending;
-  renderView();
-  try{
-    const result=await readImport(file);if(state.ui.upload!==pending)return;
-    if(result.kind==='migration'){
-      if(!isAdmin())throw new Error('Este arquivo é uma base completa com cadastros e histórico de várias zonas. Entre com o perfil Administrativo / RH para importá-lo. Supervisores podem importar somente chamados da própria zona.');
-    }
-    state.ui.upload={...result,preview:{},validation:null,result:null,validationError:null};
-  }
-  catch(error){if(state.ui.upload!==pending)return;state.ui.upload={file,reading:false,error:error.message};}
-  if(state.ui.route==='importacao')renderView();
-}
 async function changePhoto(file){
   if(!file)return;
   if(file.size>1400000||!['image/png','image/jpeg','image/webp'].includes(file.type))throw new Error('Use PNG, JPEG ou WebP de até 1,4 MB.');
@@ -346,17 +327,6 @@ document.addEventListener('click',event=>{
   if(action==='close-utility'){$('utility-dialog').close();return;}
   if(action==='asset-view'){state.ui.assets.tab=target.dataset.tab;renderView();return;}
   if(action==='team-view'){state.ui.team=target.dataset.tab;renderView();return;}
-  if(action==='clear-upload'){
-    if(jobs.has('import-operation')){toast('Aguarde a operação de importação terminar.');return;}
-    state.ui.upload=null;renderView();return;
-  }
-  if(action==='preview-page'){
-    const upload=state.ui.upload,group=previewGroups(upload).find(group=>group.key===target.dataset.group);
-    if(!group)return;
-    upload.preview[group.key]??={};upload.preview[group.key].page=Number(target.dataset.page);
-    $('preview-body-'+group.key).innerHTML=renderPreviewCategory(group,upload.preview[group.key]);
-    $('preview-search-'+group.key)?.focus({preventScroll:true});return;
-  }
   if(action==='equipment-tickets'){state.ui.filters=freshFilters();state.ui.filters.equipment=target.dataset.id;navigate('chamados');return;}
   if(action==='person-tickets'){state.ui.filters=freshFilters();state.ui.filters.technician=target.dataset.registration;navigate('chamados');return;}
   if(action==='location-equipment'){
@@ -366,12 +336,7 @@ document.addEventListener('click',event=>{
   if(action==='db-table'){void loadDatabase(target.dataset.table);return;}
   if(action==='reload-database'){void loadDatabase();return;}
   if(action==='retry-ai'){void loadSuggestion();return;}
-  if(action==='import-details'){
-    const row=state.importacoes.find(i=>i.id===Number(target.dataset.id));
-    $('utility-dialog').innerHTML=`<div class="utility-header"><div><p class="eyebrow">RESULTADO DA IMPORTAÇÃO</p><h2 id="utility-title">Linhas ignoradas</h2></div>${button('Fechar',{action:'close-utility',name:'X',tone:'quiet'})}</div><div class="utility-body"><p class="body-copy">${esc(row.nome)}</p><ul class="import-errors">${row.detalhes.map(d=>`<li><strong>Linha ${d.linha}</strong><span>${esc(d.erro)}</span></li>`).join('')}</ul></div>`;
-    $('utility-dialog').showModal();return;
-  }
-  void execute(target,['validate-import','confirm-import'].includes(action)?'import-operation':action,async()=>{
+  void execute(target,action,async()=>{
     if(action==='demo-login'){await enterAccount(target.dataset.login,'tk2026');}
     else if(action==='logout'){await api('/auth/logout',{method:'POST'});showLogin();}
     else if(action==='ticket-join'){
@@ -391,23 +356,7 @@ document.addEventListener('click',event=>{
       await refreshTicket(c.id);toast(action==='attendance-start'?'Atendimento iniciado. Horário registrado.':'Atendimento pausado. O SLA continua contando.');
     }else if(action==='attachment-delete'){
       const id=state.ui.ticket.record.id;await api('/anexos/'+target.dataset.id,{method:'DELETE'});await refreshTicket(id,'files');toast('Anexo excluído.');
-    }else if(action==='validate-import'||action==='confirm-import'){
-      const upload=state.ui.upload,confirm=action==='confirm-import';
-      if(!upload||upload.reading||upload.error||upload.result)return;
-      if(confirm&&(!upload.validation?.validado||upload.validation.ja_importado||(upload.kind!=='migration'&&!upload.validation.validas)))return;
-      upload.validationError=null;
-      try{
-        const result=await api(upload.kind==='migration'?'/migracoes':confirm?'/importacoes':'/importacoes/validar',{method:'POST',body:upload.kind==='migration'?{pacote:upload.pack,confirmar:confirm}:{nome:upload.file.name,formato:upload.format,linhas:upload.rows,confirmar:confirm}});
-        if(state.ui.upload!==upload)return;
-        if(confirm){upload.result=result;await reloadData();renderShell();toast('Importação concluída. Confira o resultado.');}
-        else upload.validation=result;
-      }catch(error){
-        if(state.ui.upload!==upload)return;
-        upload.validation=null;upload.validationError=error.message;
-      }
-      if(state.ui.upload===upload&&state.ui.route==='importacao')renderView();
-    }
-    else if(action==='refresh'){
+    }else if(action==='refresh'){
       await reloadData();renderShell();renderView();
       if(state.ui.route==='banco')await loadDatabase();
       toast('Dados atualizados.');
@@ -478,12 +427,6 @@ document.addEventListener('submit',event=>{
 
 document.addEventListener('input',event=>{
   const target=event.target;
-  if(target.dataset.previewSearch){
-    const upload=state.ui.upload,key=target.dataset.previewSearch,group=upload&&previewGroups(upload).find(group=>group.key===key);
-    if(!group)return;
-    upload.preview[key]={open:true,search:target.value,page:1};
-    preserveFocus(()=>{$('preview-body-'+key).innerHTML=renderPreviewCategory(group,upload.preview[key]);});return;
-  }
   if(target.closest('form[data-form="user"]'))rememberUserDraft();
   if(target.dataset.newfield){
     state.ui.newTicket[target.dataset.newfield]=target.value;
@@ -495,10 +438,6 @@ document.addEventListener('input',event=>{
   if(target.dataset.input==='db-search'){state.ui.database.search=target.value;renderView(true);}
   if(target.dataset.input==='user-search'){state.ui.users??={};state.ui.users.search=target.value;renderView(true);}
 });
-document.addEventListener('toggle',event=>{
-  const key=event.target.dataset?.previewGroup,upload=state.ui.upload;
-  if(key&&upload?.preview&&event.target.isConnected){upload.preview[key]??={};upload.preview[key].open=event.target.open;}
-},true);
 document.addEventListener('change',event=>{
   const target=event.target;
   if(target.id==='user-role')updateJobChoices();
@@ -517,18 +456,9 @@ document.addEventListener('change',event=>{
   }
   if(target.dataset.change==='period'){state.ui.period=target.value;renderView(true);}
   if(target.dataset.change==='asset-zone'){state.ui.assets.zone=target.value;renderView(true);}
-  if(target.dataset.change==='import-file')void chooseFile(target.files[0]);
   if(target.dataset.change==='ticket-files')void execute(null,'ticket-files',()=>attachFiles([...target.files]));
   if(target.dataset.change==='user-role'||target.dataset.change==='user-zone'){state.ui.users??={};state.ui.users[target.dataset.change==='user-role'?'role':'zone']=target.value;renderView(true);}
   if(target.dataset.change==='profile-photo')void execute(null,'profile-photo',()=>changePhoto(target.files[0]));
-});
-document.addEventListener('dragover',event=>{
-  const zone=event.target.closest('#drop-zone');
-  if(zone){event.preventDefault();zone.classList.add('is-dragging');}
-});
-document.addEventListener('dragleave',event=>event.target.closest('#drop-zone')?.classList.remove('is-dragging'));
-document.addEventListener('drop',event=>{
-  if(event.target.closest('#drop-zone')){event.preventDefault();void chooseFile(event.dataTransfer.files[0]);}
 });
 for(const id of ['ticket-dialog','utility-dialog']){
   let startedOnBackdrop=false;

@@ -1,8 +1,6 @@
 import {test,before,after} from 'node:test';
 import assert from 'node:assert/strict';
 import {once} from 'node:events';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import {createApp} from '../server/app.mjs';
 import {createDatabase,projectRoot} from '../server/db.mjs';
 let db,server,base,admin,ana,carlos,supervisor,interior,client;
@@ -95,13 +93,4 @@ test('solicitação, lembrete, triagem e encerramento preservam a abertura origi
  assert.equal((await request('/portal/solicitacoes/'+id+'/lembrete',{cookie:client,method:'POST'})).status,409);
  assert.equal((await request('/chamados/'+call+'/atendimento',{cookie:carlos,method:'POST',body:{acao:'concluir',revisao:row.revisao,solucao:'Solução fictícia registrada.'}})).status,200);
  const own=(await request('/portal/bootstrap',{cookie:client})).data.solicitacoes.find(s=>s.id===id);assert.equal(own.chamado_status,'resolvido');assert.ok(own.resolvido_em);assert.ok(!('solucao' in own));assert.ok(!('tecnico_matricula' in own));
-});
-test('base fictícia completa importa fotos, zonas, equipes e tempos sem duplicar registros',async()=>{
- const pacote=JSON.parse(await readFile(path.join(projectRoot,'fieldiqarchives/public/demonstracao-fieldiq.json'),'utf8'));
- const validate=await request('/migracoes',{method:'POST',body:{pacote,confirmar:false}});assert.equal(validate.status,200,JSON.stringify(validate.data));assert.equal(validate.data.resumo.criados.pessoas,40);
- assert.equal((await db.query("SELECT matricula FROM pessoas WHERE matricula LIKE 'DEMO2-%'")).rows.length,0);
- const imported=await request('/migracoes',{method:'POST',body:{pacote,confirmar:true}});assert.equal(imported.status,200,JSON.stringify(imported.data));
- const users=(await db.query("SELECT * FROM pessoas WHERE matricula LIKE 'DEMO2-%'")).rows;assert.equal(users.length,40);assert.ok(users.every(p=>p.foto?.startsWith('data:image/png;base64,')&&p.cpf&&p.email&&p.telefone));assert.ok(users.some(p=>p.cargo==='Estagiário de campo'));
- const calls=(await db.query("SELECT * FROM vw_chamados_metricas WHERE elevador_codigo LIKE 'DEMO2-%'")).rows;assert.equal(calls.length,160);assert.equal(new Set(calls.map(c=>c.zona_id)).size,10);assert.ok(calls.some(c=>c.status==='resolvido'&&c.sla_cumprido===false));assert.ok(calls.some(c=>c.equipe_matriculas.length>1));assert.ok(calls.some(c=>Number(c.tempo_atendimento_seg)>0));
- assert.ok((await request('/migracoes',{method:'POST',body:{pacote,confirmar:true}})).data.ja_importado);
 });

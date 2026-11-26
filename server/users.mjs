@@ -1,7 +1,6 @@
 import {hashPassword} from './auth.mjs';
 import {insist,text,optionalText,oneOf,isAdmin,supervisor,scopeParams} from './permissions.mjs';
 import {JOB_TITLES} from '../fieldiqarchives/public/assets/js/core/jobs.js';
-import {validateProfileImage} from './profile-images.mjs';
 
 export function validCPF(value){
   const s=String(value).replace(/\D/g,'');
@@ -10,14 +9,14 @@ export function validCPF(value){
   return true;
 }
 export const userColumns='matricula,nome,role,cargo,regiao,zona_id,login,ativo,email,telefone,admissao,criado_em';
-export async function saveUser(db,actor,body,existing=null,{migration=false}={}){
+export async function saveUser(db,actor,body,existing=null){
   supervisor(actor);
-  const allowed=['matricula','nome','role','cargo','zona_id','login','senha','cpf','email','telefone','admissao','ativo','locais_ids',...(migration?['foto']:[])];
+  const allowed=['matricula','nome','role','cargo','zona_id','login','senha','cpf','email','telefone','admissao','ativo','locais_ids'];
   insist(Object.keys(body).every(k=>allowed.includes(k)),400,'Campo de usuário não reconhecido.');
   if(existing)insist(isAdmin(actor)||(existing.role==='tecnico'&&existing.zona_id===actor.zona_id),403,'Você administra apenas técnicos da própria zona.');
   const role=oneOf(body.role??existing?.role??'tecnico',['tecnico','supervisor','administrativo','cliente'],'Perfil');
   insist(isAdmin(actor)||role==='tecnico',403,'O supervisor pode cadastrar apenas técnicos.');
-  // Administrative accounts are provisioned locally, never escalated through imports or the UI.
+  // Administrative accounts are provisioned locally, never escalated through the UI.
   insist(role!=='administrativo'||existing?.role==='administrativo',403,'O perfil Administrativo é criado pelo comando de configuração inicial.');
   const zone=['administrativo','cliente'].includes(role)?null:(body.zona_id??existing?.zona_id??actor.zona_id);
   insist(isAdmin(actor)||zone===actor.zona_id,403,'O supervisor não pode transferir técnicos entre zonas.');
@@ -36,10 +35,9 @@ export async function saveUser(db,actor,body,existing=null,{migration=false}={})
   insist(!existing||mat===existing.matricula,400,'A matrícula não pode ser alterada.');
   const name=text(body.nome??existing?.nome,'Nome completo',150);
   const cargo=text(body.cargo??(role===existing?.role?existing?.cargo:null)??JOB_TITLES[role][0],'Cargo',150);
-  insist(migration||JOB_TITLES[role].includes(cargo)||(existing?.role===role&&existing?.cargo===cargo),400,'Selecione um cargo compatível com o perfil.');
-  const photo=migration&&body.foto?validateProfileImage(body.foto):null;
+  insist(JOB_TITLES[role].includes(cargo)||(existing?.role===role&&existing?.cargo===cargo),400,'Selecione um cargo compatível com o perfil.');
   const cpf=body.cpf===undefined?(existing?.cpf??null):String(body.cpf).replace(/\D/g,'')||null;
-  insist(migration||existing||role==='cliente'||cpf,400,'Informe o CPF.');
+  insist(existing||role==='cliente'||cpf,400,'Informe o CPF.');
   insist(!cpf||validCPF(cpf),400,'CPF inválido. Confira os dígitos.');
   const email=optionalText(body.email??existing?.email,200).toLowerCase()||null;
   insist(!email||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),400,'E-mail inválido.');
@@ -48,9 +46,8 @@ export async function saveUser(db,actor,body,existing=null,{migration=false}={})
   const admission=body.admissao===undefined?(existing?.admissao?new Date(existing.admissao).toISOString().slice(0,10):null):body.admissao||null;
   const admissionDate=admission?new Date(admission+'T00:00:00Z'):null;
   insist(!admission||(/^\d{4}-\d{2}-\d{2}$/.test(admission)&&Number.isFinite(admissionDate.getTime())&&admissionDate.toISOString().slice(0,10)===admission&&admission<=new Date().toISOString().slice(0,10)),400,'Data de admissão inválida ou futura.');
-  const active=body.ativo??existing?.ativo??!migration;
+  const active=body.ativo??existing?.ativo??true;
   insist(typeof active==='boolean',400,'Situação de usuário inválida.');
-  insist(!migration||!active,400,'Usuários migrados começam inativos, sem senha importada.');
   const login=optionalText(body.login??existing?.login,100).toLowerCase()||null;
   insist(!login||/^[a-z0-9_.@-]{3,100}$/.test(login),400,'Usuário de acesso inválido.');
   insist(!active||login,400,'Informe o usuário de acesso.');
@@ -76,8 +73,7 @@ export async function saveUser(db,actor,body,existing=null,{migration=false}={})
   }else{
     await db.query('INSERT INTO pessoas(nome,role,cargo,regiao,zona_id,login,senha_hash,cpf,email,telefone,admissao,ativo,matricula) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',values);
   }
-  const changes=existing?'Atualização: '+Object.keys(body).filter(k=>k!=='matricula').join(', '):migration?'Cadastro migrado, sem acesso ativo.':'Usuário cadastrado.';
-  if(photo)await db.query('UPDATE pessoas SET foto=$1 WHERE matricula=$2',[photo,mat]);
+  const changes=existing?'Atualização: '+Object.keys(body).filter(k=>k!=='matricula').join(', '):'Usuário cadastrado.';
   if(isAdmin(actor)){
     await db.query('DELETE FROM cliente_locais WHERE cliente_matricula=$1',[mat]);
     for(const local of clientLocals)await db.query('INSERT INTO cliente_locais(cliente_matricula,local_id) VALUES ($1,$2)',[mat,local]);

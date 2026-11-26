@@ -17,7 +17,7 @@ O projeto usa PostgreSQL persistente, API Node.js / Express e interface HTML, CS
 - [Anexos e visualização de imagens](#anexos-e-visualização-de-imagens)
 - [Portal do cliente e triagem](#portal-do-cliente-e-triagem)
 - [Assistente de diagnóstico e recorrência](#assistente-de-diagnóstico-e-recorrência)
-- [Importação e migração de dados](#importação-e-migração-de-dados)
+- [Dados da demonstração e escopo atual](#dados-da-demonstração-e-escopo-atual)
 - [Banco de dados e persistência](#banco-de-dados-e-persistência)
 - [Configuração do ambiente](#configuração-do-ambiente)
 - [Arquitetura, linguagens e arquivos](#arquitetura-linguagens-e-arquivos)
@@ -38,7 +38,7 @@ O projeto usa PostgreSQL persistente, API Node.js / Express e interface HTML, CS
 - Git, para clonar o repositório.
 - Docker é opcional e serve apenas para executar um PostgreSQL convencional separado.
 
-A conexão com a internet é necessária para instalar as dependências. Depois da instalação, interface, ícones, fontes, gráficos e análise local do histórico funcionam sem uma API externa. O leitor de Excel carregado por CDN e a síntese generativa opcional exigem conexão.
+A conexão com a internet é necessária para instalar as dependências. Depois da instalação, interface, ícones, fontes, gráficos e análise local do histórico funcionam sem uma API externa. A síntese generativa opcional exige conexão quando configurada.
 
 ### Obter a versão funcional
 
@@ -89,11 +89,8 @@ O IP pode mudar ao reconectar a rede; confira o endereço exibido em cada inicia
 | `npm run db:export` | Exportar dados de domínio para `.fieldiq/exports/fieldiq-dominio.sql`. |
 | `npm run admin:create` | Criar uma conta Administrativo usando variáveis de ambiente. |
 | `node test/browser-operations.mjs` | Verificar operações e filtros em celular/tablet. |
-| `node test/browser-followups.mjs` | Verificar rascunhos, cargos, imagens, migração, portal e triagem. |
+| `node test/browser-followups.mjs` | Verificar rascunhos, cargos, imagens, portal e triagem. |
 | `node test/browser-team.mjs` | Verificar colaboração entre contas, conflito de edição, assumir e liberar. |
-| `node test/browser-import.mjs` | Verificar entrada única, prévia por categoria, fotos, busca, paginação, validação sem gravação, permissões e confirmação em desktop/celular. |
-| `node scripts/generate-demo.mjs` | Regenerar o arquivo fictício completo, com avatares ilustrados. |
-| `node scripts/convert-legacy.mjs ...` | Converter CSVs relacionados para um pacote de migração. |
 
 Scripts que acessam o PGlite local, como `db:init`, `db:export` e `admin:create`, devem ser usados com o servidor encerrado. A exportação da interface pode ser usada enquanto ele está aberto.
 
@@ -134,19 +131,18 @@ A API aplica a autorização em cada operação, inclusive nas consultas de anex
 | Liberar responsabilidade | Somente o responsável principal. | Própria zona. | Todas as zonas. | Não. |
 | Sair da equipe | Própria participação adicional. | Pode remover participantes da zona. | Pode remover participantes de todas as zonas. | Não. |
 | Reabrir, cancelar e reatribuir | Não. | Própria zona. | Todas as zonas. | Não. |
-| Cadastrar locais/elevadores e importar chamados | Não. | Própria zona. | Todas as zonas. | Não. |
+| Cadastrar locais e elevadores | Não. | Própria zona. | Todas as zonas. | Não. |
 | Cadastrar/editar técnicos | Não. | Própria zona, sem transferir. | Todas as zonas. | Não. |
 | Cadastrar/editar supervisores e transferir zonas | Não. | Não. | Sim. | Não. |
 | Cadastrar clientes e vincular locais | Não. | Não. | Sim. | Não há cadastro público autônomo. |
 | Fazer triagem das solicitações | Não. | Própria zona. | Todas as zonas. | Acompanha o retorno. |
 | Consultar banco/exportar domínio | Não. | Própria zona. | Todas as zonas. | Não. |
-| Migrar cadastros e histórico completos | Não. | Não. | Sim. | Não. |
 
 O responsável técnico mantém a possibilidade de revisar descrição e solução de seu chamado resolvido; participantes adicionais deixam de ter edição quando ele é encerrado. Reabrir e cancelar continuam exclusivos da gestão.
 
 ## Funções de cada área
 
-As dez áreas internas são exibidas conforme o perfil. O cliente usa outra interface.
+As nove áreas internas são exibidas conforme o perfil. O cliente usa outra interface.
 
 | Área | Funções implementadas |
 | --- | --- |
@@ -157,7 +153,6 @@ As dez áreas internas são exibidas conforme o perfil. O cliente usa outra inte
 | **Equipe de campo** | Colaboradores, cargos, zona, foto e situação; pendências, resolução e tempo médio individual; consulta dos chamados em que a pessoa é responsável ou participante. |
 | **Gestão de usuários** | Cadastro e edição, cargos por perfil, contatos, admissão, acesso, ativação/desativação, zonas e vínculos de cliente; rascunhos de formulário na sessão. |
 | **Solicitações de clientes** | Caixa de entrada da área autorizada; relato, equipamento, cliente, abertura e lembretes; aceite com atribuição/prazo/prioridade ou retorno justificado; acesso ao chamado gerado. |
-| **Importar dados** | Entrada única para chamados e bases completas, com identificação automática; resumo por categoria, fotos, busca e paginação dos registros; validação sem gravação, relatório de duplicados/erros e confirmação; exemplos para download e histórico de arquivos de chamados. |
 | **Banco de dados** | Catálogo permitido, quantidades, consulta de até 100 registros por tabela, busca nos registros exibidos, estrutura de colunas, esquema SQL, versão do banco e exportação de domínio. |
 | **Meu perfil** | Informações profissionais, cargo, matrícula, zona e resumo de atuação; alteração de foto em PNG, JPEG ou WebP, de até 1,4 MB na interface. |
 
@@ -315,93 +310,13 @@ A chave não vai ao navegador. São enviados sintomas e evidências textuais rec
 
 Os testes do provedor usam respostas simuladas; nenhuma chamada paga foi necessária para as verificações entregues. Implementação: [server/ai.mjs](server/ai.mjs).
 
-## Importação e migração de dados
+## Dados da demonstração e escopo atual
 
-### Uma única entrada e revisão do conteúdo
+A versão final do TCC não oferece importação de chamados nem migração de bases externas. O menu, as rotas, o leitor CSV/Excel/JSON, o conversor de arquivos e os exemplos de upload foram retirados. Os cadastros são feitos nas telas da aplicação; o histórico cresce com os atendimentos registrados. A demonstração inicial usa os dados fictícios de server/seed.mjs, criados somente quando a base está vazia.
 
-Em **Importar dados**, use o mesmo campo para selecionar ou arrastar qualquer arquivo aceito. A tela identifica chamados ou uma base completa e apresenta a revisão no próprio painel, sem um segundo formulário de migração.
+Esta alteração não apaga nem recria a base existente. Pessoas, fotos, zonas, locais, elevadores, chamados, participações e históricos já gravados continuam disponíveis conforme as permissões normais. A exportação de domínio na área Banco de dados é uma consulta de saída e continua disponível; não oferece restauração ou importação pela aplicação.
 
-1. **Selecionar arquivo:** CSV/TXT, Excel ou JSON de até 2 MB. Há uma seção recolhível para baixar os exemplos, inclusive a base fictícia com fotos para o Administrativo.
-2. **Conferir e validar:** o resumo mostra as categorias incluídas e suas quantidades. Expanda zonas, pessoas e fotos, locais, elevadores, chamados, histórico, equipes e períodos. Cada categoria tem busca sem distinção de acentos e paginação de cinco registros. São exibidos os campos recebidos, com referências identificadas por nome/código e miniaturas de fotos incorporadas válidas. A prévia não busca fotos em URLs externas.
-3. **Confirmar importação:** clique em **Validar arquivo** para conferir novos registros, cadastros reutilizados, duplicados e erros antes de habilitar **Confirmar importação**. Selecionar e validar não grava registros de domínio nem histórico de importação. A confirmação revalida os dados; mudanças concorrentes podem alterar o resultado final.
-
-Um supervisor pode revisar/importar apenas chamados do próprio escopo. Bases completas exigem Administrativo / RH; reconhecer o formato não amplia permissões. Remover o arquivo limpa a prévia. Durante uma requisição de importação, aguarde o término antes de remover ou trocar o arquivo.
-
-### Importar chamados
-
-Disponível à gestão no próprio escopo. Aceita CSV/TXT, JSON e Excel, com **até 2 MB e 500 linhas por arquivo**.
-
-- Prévia de todos os registros por busca e paginação antes do envio.
-- Validação por linha, relatório de erros e identificação de duplicados.
-- Linhas válidas são gravadas com seu histórico; linhas inválidas são relatadas.
-- Resultado e histórico de importações ficam disponíveis na tela.
-- CSV reconhece vírgula, ponto e vírgula, tabulação e barra vertical, respeitando campos entre aspas.
-- Excel usa a biblioteca carregada por CDN; sem ela, use CSV ou JSON.
-- Um JSON de chamados pode ser uma lista de objetos ou um único chamado. Objetos sem campos reconhecidos são rejeitados antes de mostrar uma prévia vazia.
-- Ao selecionar um pacote `fieldiq-legado-v1`, o Administrativo vê a prévia completa no mesmo painel. O supervisor recebe uma orientação para usar o perfil Administrativo / RH, sem enviar o pacote como um chamado.
-- A validação de chamados simula a gravação em uma transação com pontos de recuperação por linha e a reverte ao final. Assim detecta duplicados no banco e dentro do arquivo, sem gravar chamados, histórico ou arquivo importado. Sequências PostgreSQL podem consumir números durante essa simulação.
-- Se houver linhas válidas e inválidas, a tela informa quais serão ignoradas. A confirmação importa somente as válidas. Sem linhas válidas, não habilita a confirmação.
-
-| Campo | Regra |
-| --- | --- |
-| `titulo` | Obrigatório. |
-| `elevador_codigo` | Obrigatório na importação da interface; equipamento já cadastrado e autorizado. |
-| `descricao` | Detalhes do problema. |
-| `tecnico` | Matrícula de técnico da zona do equipamento, quando informado. |
-| `status` | Aberto, Em andamento, Resolvido ou Cancelado nos códigos indicados anteriormente. |
-| `aberto_em` | Informe para preservar a data histórica; use ISO 8601 com fuso. |
-| `solucao` e `resolvido_em` | Obrigatórios quando o status for Resolvido. |
-| `tipo_obra`, `prioridade`, `sla_horas` | Valores admitidos pela aplicação. |
-
-Datas de resolução não podem anteceder a abertura nem estar no futuro. Exemplo de data: `2026-11-01T10:00:00-03:00`.
-
-O [exemplo CSV](fieldiqarchives/public/exemplo-importacao.csv) pode ser baixado na interface.
-
-### Migrar cadastros e histórico completos
-
-Exclusivo do Administrativo. Aceita um JSON no modelo `fieldiq-legado-v1`, com **até 2 MB e 1.000 registros no total**.
-
-| Lista | Conteúdo |
-| --- | --- |
-| `zonas` | Código, região, nome e local da zona. |
-| `pessoas` | Técnicos e supervisores, cargos, contatos, CPF, admissão e foto opcional. |
-| `locais` | Locais e vínculos às zonas da origem. |
-| `elevadores` | Equipamentos e referências aos locais. |
-| `chamados` | Histórico individual, responsáveis, sintomas, soluções, datas e prazos. |
-| `historicos` | Alterações anteriores com autoria e horário. |
-| `equipes` | Participações adicionais por chamado. |
-| `atendimentos` | Períodos históricos encerrados, com início, fim e técnico. |
-
-Cada registro possui um ID da origem. As referências são traduzidas para os IDs locais. O fluxo **Conferir conteúdo → Validar arquivo → Confirmar importação** revalida os dados e grava o pacote inteiro em uma transação.
-
-- A validação reverte os registros ao final; sequências PostgreSQL podem consumir números sem criar chamados.
-- Um erro impede a gravação do pacote completo e informa entidade/posição.
-- Reenviar o mesmo pacote não duplica registros.
-- Reutilizar um ID da mesma origem com conteúdo diferente gera conflito, sem sobrescrita silenciosa.
-- Contas migradas ficam inativas e não recebem senhas antigas. O Administrativo define uma senha nova e ativa o acesso.
-- Foto de perfil: PNG, JPEG ou WebP em base64, com até 96 KB no pacote.
-- Períodos precisam estar dentro do intervalo do chamado; sobreposições do mesmo técnico são rejeitadas.
-- Informar apenas o primeiro início não faz o sistema inventar períodos ou tempo trabalhado.
-- Clientes, solicitações do portal e anexos binários dos chamados não fazem parte desse pacote.
-
-Arquivos para baixar:
-
-- [Exemplo mínimo de migração](fieldiqarchives/public/exemplo-migracao.json).
-- [Base fictícia completa](fieldiqarchives/public/demonstracao-fieldiq.json).
-
-A base completa tem **10 zonas, 40 colaboradores, 20 locais, 40 elevadores, 160 chamados, 280 registros de histórico, 40 participações adicionais e 160 períodos de trabalho**. Inclui dados sintéticos e **avatares ilustrados gerados localmente**, não retratos de pessoas reais. Ela reutiliza as zonas iniciais e usa identificadores próprios para coexistir com a base demonstrativa. Não é importada automaticamente.
-
-Para usar `demonstracao-fieldiq.json`, entre como **Administrativo / RH**, abra **Importar dados** e selecione o arquivo no campo único. Confira as quantidades e expanda as categorias para revisar nomes, fotos e dados dos registros. Clique em **Validar arquivo** e depois em **Confirmar importação**. Apenas selecionar ou validar não grava a base. Se o arquivo aparecer como “1 registro” sem título/elevador, recarregue a página para obter a versão atual. Contas importadas permanecem inativas até definição de senha e ativação pela gestão.
-
-Para converter CSVs relacionados:
-
-```powershell
-node scripts/convert-legacy.mjs 'D:\dados-legado' 'Empresa demonstrativa — sistema anterior' 'D:\dados-legado\pacote-fieldiq.json' 'D:\dados-legado\mapeamento.json'
-```
-
-O mapeamento é opcional quando as colunas já seguem o modelo. O conversor lê `zonas.csv`, `pessoas.csv`, `locais.csv`, `elevadores.csv`, `chamados.csv`, `historicos.csv`, `equipes.csv` e `atendimentos.csv`. O guia traz o formato de mapeamento de colunas, valores e padrões: [MIGRACAO-E-SISTEMAS-DO-SETOR.md](docs/MIGRACAO-E-SISTEMAS-DO-SETOR.md).
-
-A pesquisa documenta exemplos reais de sistemas do setor, sem afirmar que um SGBD específico predomine. Não há conector direto com fornecedores, execução de SQL por upload ou restauração de BAK/FDB.
+A importação poderá ser reconsiderada como trabalho futuro, com análise da origem, mapeamento e transformação de campos, conferência de vínculos e tratamento de erros. Não há promessa de compatibilidade automática com bancos de terceiros. O motivo é concentrar a entrega atual na gestão de atendimentos, indicadores e identificação de recorrências, com um escopo que possa ser demonstrado e explicado. A pesquisa documental anterior está em [Sistemas do setor e evolução futura](docs/MIGRACAO-E-SISTEMAS-DO-SETOR.md).
 
 ## Banco de dados e persistência
 
@@ -439,7 +354,7 @@ Encerre o servidor, execute `npm run db:init` e inicie novamente. O serviço sep
 | Operação | `chamados`, `historico_chamados`, `equipe_chamado`, `atendimentos`. |
 | Evidências | `anexos_chamados`. |
 | IA | `sugestoes_ia`, `avaliacoes_ia`. |
-| Importação/migração | `importacoes`, `migracoes_legado`, `referencias_legado`. |
+| Estruturas históricas sem função ativa | `importacoes`, `migracoes_legado`, `referencias_legado`: mantidas apenas por compatibilidade, fora do catálogo operacional. |
 | Identidade/auditoria | `sessoes`, `auditoria_usuarios`. |
 | Cliente | `cliente_locais`, `solicitacoes_clientes`, `lembretes_solicitacoes`. |
 | Controle de esquema | `schema_migrations`, criada pelo inicializador. |
@@ -495,7 +410,7 @@ Para criar o primeiro Administrativo em uma base sem demonstração, configure `
 npm run admin:create
 ```
 
-Depois, remova `ADMIN_PASSWORD` do ambiente. Zonas e locais precisam existir antes dos vínculos de colaboradores e clientes; podem ser cadastrados conforme os fluxos disponíveis ou trazidos pelo pacote de migração.
+Depois, remova `ADMIN_PASSWORD` do ambiente. Zonas e locais precisam existir antes dos vínculos de colaboradores e clientes; são cadastrados pelos fluxos disponíveis na aplicação.
 
 Não publique `.env`, chaves de API, senhas reais ou URLs de conexão com credenciais.
 
@@ -523,10 +438,10 @@ flowchart LR
 | CSS | Cores, tipografia, componentes, layouts, formulários, celular/tablet e portal. |
 | SQL / PostgreSQL | Tabelas, relacionamentos, índices, restrições, views, migrações e consultas parametrizadas. |
 | Batch `.cmd` | Inicializador para Windows. |
-| JSON | Dependências, configuração Vercel, pacotes de importação, dados fictícios e comunicação da API. |
+| JSON | Dependências, configuração Vercel, dados fictícios e comunicação da API. |
 | YAML | Docker Compose. |
 | Markdown e Mermaid | Documentação, tabelas e diagrama de arquitetura. |
-| CSV/TXT | Intercâmbio de dados e arquivos de exemplo; não são linguagens de programação. |
+| CSV/TXT | Podem acompanhar chamados como anexos; não há leitura para importar cadastros e não são linguagens de programação. |
 | PowerShell | Exemplos de execução para Windows na documentação. |
 
 Bibliotecas principais: Express, PGlite, `pg`, Chart.js, Lucide e Inter local. Verificação de interface: Playwright e axe. As versões instaláveis estão em [package.json](package.json) e [package-lock.json](package-lock.json). Licenças e avisos estão em [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
@@ -541,12 +456,11 @@ fieldiqv1/
 ├── fieldiqarchives/public/
 │   ├── index.html              Área interna
 │   ├── cliente.html            Portal do cliente
-│   ├── assets/js/core/         Estado, API, formatação, importação e catálogo de cargos
+│   ├── assets/js/core/         Estado, API, formatação e catálogo de cargos
 │   ├── assets/js/components/   Componentes de interface
 │   ├── assets/js/views/        Telas internas
 │   ├── assets/js/client-app.js Portal
 │   ├── assets/css/             Estilos compartilhados e por área
-│   └── *.csv / *.json          Exemplos e base fictícia
 ├── scripts/                    Build, banco, Administrativo, conversão e demonstração
 ├── test/                       Testes de regras, API e navegadores
 ├── docs/                       Pesquisas e detalhamento funcional
@@ -595,7 +509,7 @@ Todas as rotas abaixo usam o prefixo `/api`. A sessão é um cookie `fieldiq_ses
 
 A rota antiga `POST /equipe` não deve ser usada para transferências. Ela bloqueia supervisores e, para Administrativo, responde com orientação de usar Gestão de usuários.
 
-### Arquivos, IA, importação e banco
+### Arquivos, análise de recorrências e banco
 
 | Método e rota | Função |
 | --- | --- |
@@ -605,10 +519,6 @@ A rota antiga `POST /equipe` não deve ser usada para transferências. Ela bloqu
 | `DELETE /anexos/:id` | Excluir anexo permitido, com histórico. |
 | `POST /chamados/:id/sugestao` | Recuperar evidências e gerar análise de recorrência. |
 | `POST /sugestoes/:id/avaliacao` | Registrar `util: true` ou `false`. |
-| `POST /importacoes` | Receber linhas de chamados: `confirmar: false` valida sem gravar; `true` importa e registra o resultado. Resposta informa duplicados e erros. Clientes antigos que omitem `confirmar` mantêm o envio direto. |
-| `POST /importacoes/validar` | Rota usada pela nova tela para validar chamados. Nunca confirma a gravação, mesmo se receber `confirmar: true`; servidor antigo responde rota inexistente em vez de importar silenciosamente. |
-| `GET /migracoes` | Histórico das migrações completas, para Administrativo. |
-| `POST /migracoes` | Receber `pacote` e `confirmar: false` para prévia ou `true` para gravação. |
 | `GET /banco` | Catálogo e informações do banco. |
 | `GET /banco/:table` | Consultar tabela permitida no escopo. |
 | `GET /banco/export` | Exportar SQL de domínio. |
@@ -637,7 +547,7 @@ npm test
 npm run build
 ```
 
-A última verificação funcional registrada passou em **40 arquivos JavaScript e 37 testes automatizados**, além do build. Os testes cobrem autenticação, autorização por zona/perfil, cargos, clientes, equipes, desatribuição, anexos, SLA, métricas, reconhecimento de arquivos, categorias/referências/fotos da prévia, busca e paginação, validação sem gravação, importação, migração, conversor CSV, exportação e persistência/atualização de banco.
+A última verificação funcional registrada passou em **32 arquivos JavaScript e 26 testes automatizados**, além do build. Os testes cobrem autenticação, autorização por zona/perfil, cargos, clientes, equipes, desatribuição, anexos, SLA, métricas, retirada das rotas de importação, preservação dos dados, exportação e persistência/atualização de banco.
 
 ### Interface
 
@@ -654,13 +564,10 @@ node test/browser-followups.mjs
 node test/browser-team.mjs
 ```
 
-O script de geração de avatares também usa o Edge por meio do Playwright; não é uma dependência do servidor em execução.
+Cobertura registrada: nove telas internas em larguras de 320, 375, 390, 430, 768, 834, 1024 e 1440 px; WebKit em dimensões de iPhone; fluxos de cadastro, rascunho, cargos, visualização/zoom, cliente/triagem, colaboração entre contas e assumir/liberar.
 
-Cobertura registrada: dez telas internas em larguras de 320, 375, 390, 430, 768, 834, 1024 e 1440 px; WebKit em dimensões de iPhone; fluxos de cadastro, rascunho, cargos, visualização/zoom, migração completa, cliente/triagem, colaboração entre contas e assumir/liberar.
+Na verificação da versão sem importação foram concluídas **14 verificações axe gerais e 18 dos fluxos de cadastro, imagens e portal**, sem violações detectadas nos cenários avaliados. Isso não substitui uso em aparelho físico nem certificação integral de acessibilidade. As entregas anteriores e seus resultados históricos permanecem registrados no CHANGELOG.
 
-Foram concluídas **17 verificações axe gerais, 20 operacionais e 21 dos novos fluxos**, sem violações detectadas nos cenários avaliados. Isso não substitui uso em aparelho físico nem certificação integral de acessibilidade.
-
-A correção de reconhecimento da base fictícia acrescentou **9 verificações axe** no Edge/WebKit, em 320, 390 e 1440 px: entrada comum, prévia completa e orientação por perfil. O teste importa os 160 chamados somente em banco isolado, confirma que selecionar/validar não grava, verifica reenvio sem duplicação e mantém a importação de chamados para supervisores.
 
 Capturas e relatórios são gerados em `test-results/redesign`, `test-results/operations` e `test-results/followups`, fora do Git. A interface móvel usa cartões, cinco chamados por página, navegação inferior, filtros completos em grade e abas reorganizadas. No computador, são dez chamados por página.
 
@@ -690,11 +597,8 @@ A API serverless usa [api/index.mjs](api/index.mjs). Não coloque credenciais em
 | Técnico não consegue iniciar | Precisa ser responsável/participante autorizado e o chamado deve ter responsável principal. |
 | Não consegue concluir | Apenas responsável principal/gestão; solução obrigatória e revisão atual. |
 | Transferência ou desativação bloqueada | Reatribua responsabilidades e encerre participações em chamados pendentes. |
-| Usuário migrado não entra | A conta começa inativa e sem senha; defina senha e ativação pela gestão autorizada. |
+| Conta inativa não entra | Defina senha e ativação pela gestão autorizada. |
 | CPF duplicado/inválido | Confira dígitos e cadastros existentes; a verificação não consulta cadastro oficial. |
-| Excel não carrega | A biblioteca vem de CDN; use CSV/JSON ou restabeleça a conexão. |
-| Migração relata referência ausente | Confira os IDs de origem e seus vínculos, não apenas os nomes visíveis. |
-| Mesmo ID importado com outro conteúdo | O sistema impede sobrescrita. Use a edição do cadastro ou outro conjunto de origem. |
 | Anexo rejeitado | Confira formato real, extensão, duplicidade, tamanho e permissões. |
 | Lembrete indisponível | Solicitação já triada ou ainda dentro do intervalo de uma hora. |
 | IA não usa modelo externo | Verifique chave e modelo no servidor; falhas retornam análise local identificada. |
@@ -723,6 +627,6 @@ Toda alteração do projeto deve ser registrada em commit e sincronizada na bran
 - [AGENTS.md](AGENTS.md): instruções para agentes que trabalharem neste repositório.
 - [PESQUISA-UX-UI.md](docs/PESQUISA-UX-UI.md): decisões de interface, indicadores e responsividade.
 - [CARGOS-E-PORTAL.md](docs/CARGOS-E-PORTAL.md): cargos, equipes, rascunhos, portal e base fictícia.
-- [MIGRACAO-E-SISTEMAS-DO-SETOR.md](docs/MIGRACAO-E-SISTEMAS-DO-SETOR.md): fontes do setor e formato de migração.
+- [MIGRACAO-E-SISTEMAS-DO-SETOR.md](docs/MIGRACAO-E-SISTEMAS-DO-SETOR.md): pesquisa histórica do setor e possibilidades de evolução futura.
 
 Código-fonte, migrações, scripts, testes, dependências declaradas e exemplos fictícios são versionados. `node_modules/`, `public/` gerada, `.env`, `.fieldiq/`, resultados de testes e credenciais de implantação são ignorados conforme [.gitignore](.gitignore).

@@ -34,7 +34,7 @@ erDiagram
   PESSOAS ||--o{ AVALIACOES_IA : avalia
 ```
 
-Também existem importações e sessões. A relação do técnico com o chamado é opcional até a atribuição; a relação de todo chamado com um elevador é obrigatória.
+Também existem sessões. A importação de dados não integra o escopo atual. A relação do técnico com o chamado é opcional até a atribuição; a relação de todo chamado com um elevador é obrigatória.
 
 ## Fluxo da apresentação
 

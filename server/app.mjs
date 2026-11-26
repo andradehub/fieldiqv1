@@ -1,6 +1,5 @@
 import express from 'express';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
 import { publicPerson, verifyPassword, readToken, hashToken, newToken } from './auth.mjs';
 import { projectRoot, schemaSQL } from './db.mjs';
 import { suggestForTicket } from './ai.mjs';
@@ -8,7 +7,6 @@ import {ApiError,insist,text,optionalText,oneOf,integer,supervisor,canEdit,canCl
 import {registerUserRoutes} from './users.mjs';
 import {registerAttachmentRoutes} from './attachments.mjs';
 import {registerAttendanceRoutes,closeIntervals,beginInterval} from './attendance.mjs';
-import {registerMigrationRoutes} from './migration.mjs';
 import {registerPortalRoutes,internalRequests} from './portal.mjs';
 
 export {ApiError};
@@ -19,9 +17,9 @@ async function equipment(db, id, user) {
   insist(canReadZone(user,e.zona_id) && e.ativo, 403, 'Escolha um elevador ativo da sua zona.');
   return e;
 }
-async function technician(db, matricula, zone, allowInactive=false) {
+async function technician(db, matricula, zone) {
   if (!matricula) return null;
-  const result = await db.query("SELECT matricula FROM pessoas WHERE matricula=$1 AND role='tecnico' AND (ativo OR $3::boolean) AND zona_id=$2", [text(matricula,'Matrícula',40),zone,allowInactive]);
+  const result = await db.query("SELECT matricula FROM pessoas WHERE matricula=$1 AND role='tecnico' AND ativo AND zona_id=$2", [text(matricula,'Matrícula',40),zone]);
   insist(result.rows.length, 400, 'O técnico precisa pertencer à equipe da zona do elevador.');
   return matricula;
 }
@@ -29,27 +27,26 @@ const works = ['obra_nova','mod_integral','mod_parcial'];
 const priorities = ['baixa','media','alta','critica'];
 const statuses = ['aberto','em_andamento','resolvido','cancelado'];
 
-export async function insertTicket(db, body, user, imported = false) {
+export async function insertTicket(db, body, user, {openedAt} = {}) {
   const e = await equipment(db, body.elevador_id, user);
-  const tech = await technician(db, body.tecnico || null, e.zona_id,imported);
-  const status = imported ? oneOf(body.status ?? 'aberto',statuses,'Status') : 'aberto';
+  const tech = await technician(db, body.tecnico || null, e.zona_id);
+  const status = 'aberto';
   const title = text(body.titulo,'Título',200);
   const desc = optionalText(body.descricao);
   const solution = optionalText(body.solucao);
-  const open = imported && body.aberto_em ? new Date(body.aberto_em) : new Date();
+  const open = openedAt ? new Date(openedAt) : new Date();
   const close = status === 'resolvido' && body.resolvido_em ? new Date(body.resolvido_em) : null;
   insist(Number.isFinite(open.getTime()) && open.getTime() <= Date.now() + 60000, 400, 'Data de abertura inválida ou futura.');
   insist(status !== 'resolvido' || (solution && close && Number.isFinite(close.getTime()) && close >= open && close.getTime() <= Date.now() + 60000), 400, 'Chamado resolvido exige solução e data de resolução válidas.');
   const type = oneOf(body.tipo_obra ?? 'mod_parcial',works,'Classificação');
   const priority = oneOf(body.prioridade ?? 'media',priorities,'Prioridade');
   const sla = integer(body.sla_horas ?? 24,'SLA',1,8760);
-  const key = imported ? createHash('sha256').update(JSON.stringify([e.id,title,desc,status,body.aberto_em ?? '',body.resolvido_em ?? '',solution])).digest('hex') : null;
   const row = await db.query(
     'INSERT INTO chamados (elevador_id,titulo,descricao,tipo_obra,prioridade,status,sla_horas,tecnico_matricula,aberto_em,resolvido_em,solucao,criado_por,chave_importacao) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id',
-    [e.id,title,desc,type,priority,status,sla,tech,open.toISOString(),close?.toISOString() ?? null,solution || null,user.matricula,key]
+    [e.id,title,desc,type,priority,status,sla,tech,open.toISOString(),close?.toISOString() ?? null,solution || null,user.matricula,null]
   );
   const id = row.rows[0].id;
-  await db.query('INSERT INTO historico_chamados (chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)', [id,user.matricula,imported ? 'Chamado importado com identificação do elevador.' : 'Chamado criado.']);
+  await db.query('INSERT INTO historico_chamados (chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)', [id,user.matricula,'Chamado criado.']);
   return id;
 }
 
@@ -61,7 +58,6 @@ const tableQueries = {
   elevadores: 'SELECT e.* FROM elevadores e JOIN locais l ON l.id=e.local_id WHERE ($1::boolean OR l.zona_id=$2)',
   chamados: 'SELECT c.* FROM chamados c JOIN vw_chamados_metricas v ON v.id=c.id WHERE ($1::boolean OR v.zona_id=$2)',
   historico_chamados: 'SELECT h.* FROM historico_chamados h JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
-  importacoes: 'SELECT i.* FROM importacoes i JOIN pessoas p ON p.matricula=i.usuario_matricula WHERE ($1::boolean OR p.zona_id=$2)',
   sugestoes_ia: 'SELECT s.* FROM sugestoes_ia s JOIN vw_chamados_metricas c ON c.id=s.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
   avaliacoes_ia: 'SELECT a.* FROM avaliacoes_ia a JOIN sugestoes_ia s ON s.id=a.sugestao_id JOIN vw_chamados_metricas c ON c.id=s.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
   atendimentos: 'SELECT a.* FROM atendimentos a JOIN vw_chamados_metricas c ON c.id=a.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
@@ -151,16 +147,15 @@ export function createApp(db) {
   api.get('/bootstrap',async (req,res) => {
     if(req.user.role==='cliente'){res.json({user:req.user,portal:true});return;}
     const params = scopeParams(req.user);
-    const [zones,people,places,lifts,tickets,history,imports] = await Promise.all([
+    const [zones,people,places,lifts,tickets,history] = await Promise.all([
       db.query(tableQueries.zonas+' ORDER BY id',params),
       db.query('SELECT matricula,nome,role,cargo,regiao,zona_id,foto,ativo FROM pessoas WHERE ($1::boolean OR zona_id=$2) ORDER BY nome',params),
       db.query(tableQueries.locais + ' ORDER BY l.nome',params),
       db.query('SELECT e.*,l.nome AS local_nome,l.zona_id FROM elevadores e JOIN locais l ON l.id=e.local_id WHERE ($1::boolean OR l.zona_id=$2) ORDER BY e.codigo',params),
       db.query('SELECT *,tecnico_matricula AS tecnico FROM vw_chamados_metricas WHERE ($1::boolean OR zona_id=$2) ORDER BY aberto_em DESC,id DESC',params),
-      db.query('SELECT h.*,p.nome AS usuario,p.matricula FROM historico_chamados h JOIN pessoas p ON p.matricula=h.usuario_matricula JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE ($1::boolean OR c.zona_id=$2) ORDER BY h.data,h.id',params),
-      manages(req.user) ? db.query('SELECT * FROM importacoes WHERE usuario_matricula=$1 ORDER BY data DESC LIMIT 50',[req.user.matricula]) : {rows:[]}
+      db.query('SELECT h.*,p.nome AS usuario,p.matricula FROM historico_chamados h JOIN pessoas p ON p.matricula=h.usuario_matricula JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE ($1::boolean OR c.zona_id=$2) ORDER BY h.data,h.id',params)
     ]);
-    res.json({user:req.user,zonas:zones.rows,pessoas:people.rows,locais:places.rows,elevadores:lifts.rows,chamados:tickets.rows.map(c => ({...c,historico:history.rows.filter(h => h.chamado_id === c.id)})),importacoes:imports.rows,solicitacoes:manages(req.user)?await internalRequests(db,req.user):[]});
+    res.json({user:req.user,zonas:zones.rows,pessoas:people.rows,locais:places.rows,elevadores:lifts.rows,chamados:tickets.rows.map(c => ({...c,historico:history.rows.filter(h => h.chamado_id === c.id)})),solicitacoes:manages(req.user)?await internalRequests(db,req.user):[]});
   });
   api.post('/chamados',async (req,res) => {
     supervisor(req.user);
@@ -235,49 +230,6 @@ export function createApp(db) {
     await db.query('UPDATE pessoas SET foto=$1 WHERE matricula=$2',[foto,req.user.matricula]);
     res.json({ok:true});
   });
-  api.post(['/importacoes','/importacoes/validar'],async (req,res) => {
-    supervisor(req.user);
-    insist(Array.isArray(req.body.linhas) && req.body.linhas.length > 0 && req.body.linhas.length <= 500,400,'Importe entre 1 e 500 linhas por arquivo.');
-    const name = text(req.body.nome,'Arquivo',200);
-    const format = oneOf(req.body.formato,['csv','txt','json','xlsx','xls'],'Formato');
-    insist(req.body.confirmar===undefined||typeof req.body.confirmar==='boolean',400,'Informe se é validação ou importação.');
-    const preview=req.path==='/importacoes/validar'||req.body.confirmar===false,rollback=Symbol('preview');
-    const details = [];
-    let imported = 0,duplicates=0;
-    async function insertRow(tx,i){
-        const body = {...req.body.linhas[i]};
-        if (body.elevador_codigo) {
-          const found = await tx.query('SELECT id FROM elevadores WHERE codigo=$1',[String(body.elevador_codigo).toUpperCase()]);
-          body.elevador_id = found.rows[0]?.id;
-        }
-        await insertTicket(tx,body,req.user,true);
-    }
-    function rowError(error,i){
-      if(error.code==='23505')duplicates++;
-      details.push({linha:i+2,erro:error.code==='23505'?'Registro já importado.':error.status?error.message:'Dados inválidos nesta linha.'});
-    }
-    if(preview){
-      try{
-        await db.transaction(async tx=>{
-          for(let i=0;i<req.body.linhas.length;i++){
-            await tx.query('SAVEPOINT import_row');
-            try{await insertRow(tx,i);imported++;}
-            catch(error){await tx.query('ROLLBACK TO SAVEPOINT import_row');rowError(error,i);}
-            await tx.query('RELEASE SAVEPOINT import_row');
-          }
-          throw rollback;
-        });
-      }catch(error){if(error!==rollback)throw error;}
-      res.json({validado:true,validas:imported,importadas:0,erros:details.length,duplicadas:duplicates,detalhes:details});return;
-    }
-    // Each valid row and its audit entry commit together; invalid rows are reported.
-    for(let i=0;i<req.body.linhas.length;i++){
-      try{await db.transaction(tx=>insertRow(tx,i));imported++;}
-      catch(error){rowError(error,i);}
-    }
-    await db.query('INSERT INTO importacoes (usuario_matricula,nome,formato,importadas,erros,detalhes) VALUES ($1,$2,$3,$4,$5,$6)',[req.user.matricula,name,format,imported,details.length,JSON.stringify(details)]);
-    res.json({importadas:imported,erros:details.length,duplicadas:duplicates,detalhes:details});
-  });
   api.post('/chamados/:id/sugestao',async (req,res) => {
     const ticket = await getTicket(db,req.params.id,req.user);
     const {rows} = await db.query('SELECT * FROM vw_chamados_metricas WHERE zona_id=$1 AND id<>$2 AND aberto_em<$3',[ticket.zona_id,ticket.id,ticket.aberto_em]);
@@ -317,7 +269,6 @@ export function createApp(db) {
   registerUserRoutes(api,db);
   registerAttachmentRoutes(api,db);
   registerAttendanceRoutes(api,db);
-  registerMigrationRoutes(api,db,insertTicket);
   registerPortalRoutes(api,db,insertTicket);
   api.use((_req,res) => res.status(404).json({error:'Rota não encontrada.'}));
   app.get('/vendor/chart.umd.js',(_req,res) => res.sendFile(path.join(projectRoot,'node_modules/chart.js/dist/chart.umd.js')));

@@ -2,6 +2,16 @@
 
 Este histórico registra o problema que motivou cada entrega e seu efeito na aplicação. Os commits publicados mantêm seus identificadores; as explicações abaixo complementam suas mensagens.
 
+## 2026-11-26 — retirada da importação do escopo final do TCC
+
+**Motivo:** o responsável decidiu concentrar a apresentação na gestão dos chamados, indicadores e identificação de recorrências. A compatibilização de bases externas depende de análise e mapeamento de cada origem e fica como possibilidade futura, em vez de compor a entrega atual.
+
+**Alterações:** removidos menu, tela, estado, leitura CSV/Excel/JSON, conversor, gerador do pacote adicional, exemplos públicos e endpoints de importação e migração de dados. Retirada a biblioteca Excel carregada por CDN e seus estilos exclusivos. O catálogo operacional do banco não apresenta mais o histórico de importações. Os cadastros continuam pelas telas próprias, e a exportação de domínio permanece disponível. A triagem do cliente preserva a abertura original por uma opção interna específica, mantendo o SLA. README, guias e testes foram alinhados ao escopo; a pesquisa de sistemas permanece como referência para uma eventual evolução futura.
+
+**Preservação:** as migrações de esquema 001 a 005 e as estruturas históricas permanecem por compatibilidade, sem função de importação ativa. Não houve exclusão de registros nem recriação da base. Antes da atualização foi feita cópia local de segurança. A comparação anterior/posterior preservou 10 zonas, 52 pessoas com suas fotos, 25 locais, 46 elevadores, 179 chamados com históricos e vínculos de equipe e 2 solicitações de clientes.
+
+**Verificação:** 32 arquivos JavaScript e 26 testes automatizados aprovados, incluindo tentativas nas rotas retiradas sem alteração dos dados e preservação do SLA na triagem. A suíte geral passou nas nove telas e oito larguras, de 320 a 1440 px, incluindo WebKit e 14 verificações axe sem violações. Outros 18 cenários axe em 320, 390 e 1440 px conferiram rascunhos, cargos, fotos, cliente e triagem, também sem violações. Build, links locais e diff conferidos. Na instância em rede, os endpoints retirados responderam 404 e o resumo criptográfico dos dados comparados permaneceu idêntico.
+
 ## 2026-11-20 — espaçamento da nova solicitação no portal
 
 **Motivo:** detalhes do problema, aviso de encaminhamento e botão de envio apareciam encostados. A classe de organização do formulário estava definida apenas no CSS do painel interno, que não é carregado pelo portal do cliente.
