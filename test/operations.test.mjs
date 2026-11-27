@@ -120,5 +120,5 @@ test('migração de esquema preserva banco da versão anterior e não reaplica a
   assert.deepEqual(migrated.map(c=>c.prioridade),['A','A','B','C']);
   for(let i=0;i<before.length;i++)for(const key of Object.keys(before[i]).filter(k=>k!=='prioridade'))assert.deepEqual(migrated[i][key],before[i][key],'Migração alterou '+key);
   await upgraded.close();
-  upgraded=await createDatabase({dataDir:folder,demo:false});try{assert.equal((await upgraded.query('SELECT * FROM schema_migrations')).rows.length,6);}finally{await upgraded.close();}
+  upgraded=await createDatabase({dataDir:folder,demo:false});try{assert.equal((await upgraded.query('SELECT * FROM schema_migrations')).rows.length,7);}finally{await upgraded.close();}
 });

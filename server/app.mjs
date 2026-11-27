@@ -1,3 +1,5 @@
+import {registerNotificationJobRoute} from './notification-jobs.mjs';
+import {registerNotificationRoutes,notifyAssignment} from './notifications.mjs';
 import express from 'express';
 import path from 'node:path';
 import { publicPerson, verifyPassword, readToken, hashToken, newToken } from './auth.mjs';
@@ -49,6 +51,7 @@ export async function insertTicket(db, body, user, {openedAt} = {}) {
   );
   const id = row.rows[0].id;
   await db.query('INSERT INTO historico_chamados (chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)', [id,user.matricula,'Chamado criado.']);
+  await notifyAssignment(db,{id,zona_id:e.zona_id},user,{atual:tech,chave:'criado:'+id});
   return id;
 }
 
@@ -104,13 +107,14 @@ export function createApp(db) {
     }
     next();
   });
+  registerNotificationJobRoute(app,db);
   app.use(express.json({limit:'3mb'}));
   app.use((req,_res,next) => { req.body ??= {}; next(); });
   const api = express.Router();
   app.use('/api',api);
   const cookieOptions = {httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV === 'production',path:'/',maxAge:12*3600000};
   api.get('/health',(_req,res) => res.json({ok:true}));
-  api.get('/config',(_req,res) => res.json({demo:db.demo,quickDemo:db.demo && db.kind === 'PostgreSQL local (PGlite)'}));
+  api.get('/config',(_req,res) => res.json({notificacoes:true,demo:db.demo,quickDemo:db.demo && db.kind === 'PostgreSQL local (PGlite)'}));
   const attempts = new Map();
   api.post('/auth/login', async (req,res) => {
     const key = req.ip;
@@ -201,6 +205,7 @@ export function createApp(db) {
       if (priority !== c.prioridade) changes.push('Prioridade atualizada');
       if (sla !== c.sla_horas) changes.push('SLA atualizado para ' + sla + 'h');
       await tx.query('INSERT INTO historico_chamados (chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)',[c.id,req.user.matricula,changes.join('; ') || 'Registro revisado']);
+      if(tech!==c.tecnico_matricula)await notifyAssignment(tx,c,req.user,{anterior:c.tecnico_matricula,atual:tech,chave:'responsavel:'+c.id+':'+(c.revisao+1)});
       return {id:c.id,revisao:c.revisao+1};
     });
     res.json(result);
@@ -270,6 +275,7 @@ export function createApp(db) {
     const visible=rows.length?new Set(Object.keys(rows[0])):null;
     res.json({tabela:req.params.table,linhas:rows,colunas:columns.rows.filter(c => !['senha_hash','foto','cpf','login'].includes(c.column_name)&&(!visible||visible.has(c.column_name)))});
   });
+  registerNotificationRoutes(api,db);
   registerUserRoutes(api,db);
   registerTechnicianRoutes(api,db);
   registerAttachmentRoutes(api,db);

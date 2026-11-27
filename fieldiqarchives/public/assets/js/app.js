@@ -1,3 +1,4 @@
+import {createNotificationCenter} from './core/notifications.js';
 import {state,routes,isSupervisor,isAdmin,acceptData,canEdit} from './core/state.js';
 import {api} from './core/api.js';
 import {esc} from './core/format.js';
@@ -41,6 +42,8 @@ let databaseRequest=0;
 const freshFilters=()=>({search:'',status:'',priority:'',work:'',technician:'',equipment:'',flag:'',period:'all'});
 const freshTicket=()=>({step:1,titulo:'',descricao:'',elevador_id:'',tipo_obra:'mod_parcial',prioridade:'B',sla_horas:24,tecnico:''});
 const views={dashboard:renderDashboard,chamados:renderTickets,meuschamados:renderTickets,perfiltecnico:renderTechnicianProfile,novochamado:renderNewTicket,elevadores:renderAssets,tecnicos:renderTeam,usuarios:renderUsers,solicitacoes:renderRequests,perfil:renderProfile,banco:renderDatabase};
+
+const notificationCenter=createNotificationCenter({toast,navigate,openTicket,reload:reloadData});
 
 function toast(message){
   $('toast').textContent=message;
@@ -140,9 +143,11 @@ async function reloadData(){
   const data=await api('/bootstrap');
   if(data.portal){location.replace('/cliente.html');return false;}
   acceptData(data);
+  notificationCenter.start();
   state.ui.database.info=null;state.ui.database.data=null;
 }
 function showLogin(){
+  notificationCenter.stop();
   userDrafts.clear();
   $('image-dialog').close();
   disposeCharts();

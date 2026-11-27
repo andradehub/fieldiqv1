@@ -1,4 +1,5 @@
 import {insist,text,integer,supervisor,scopeParams,isAdmin} from './permissions.mjs';
+import {notify,managers} from './notifications.mjs';
 const details=`SELECT s.*,e.codigo AS elevador_codigo,l.id AS local_id,l.nome AS local_nome,l.zona_id,p.nome AS cliente_nome,c.status AS chamado_status,c.resolvido_em,c.sla_horas,c.sla_cumprido,c.sla_vencido,c.tempo_resolucao_min,
   (SELECT count(*)::integer FROM lembretes_solicitacoes r WHERE r.solicitacao_id=s.id) AS total_lembretes,
   (SELECT max(r.data) FROM lembretes_solicitacoes r WHERE r.solicitacao_id=s.id) AS ultimo_lembrete
@@ -25,15 +26,22 @@ export function registerPortalRoutes(api,db,insertTicket){
     client(req.user);
     insist(Object.keys(req.body).every(k=>['elevador_id','titulo','descricao'].includes(k)),400,'Preencha apenas os dados da solicitação.');
     const lift=integer(req.body.elevador_id,'Elevador');
-    const allowed=(await db.query('SELECT e.id FROM elevadores e JOIN cliente_locais cl ON cl.local_id=e.local_id WHERE e.id=$1 AND e.ativo AND cl.cliente_matricula=$2',[lift,req.user.matricula])).rows;
-    insist(allowed.length,404,'Elevador não encontrado nos seus locais.');
-    const row=(await db.query('INSERT INTO solicitacoes_clientes(cliente_matricula,elevador_id,titulo,descricao) VALUES ($1,$2,$3,$4) RETURNING id',[req.user.matricula,lift,text(req.body.titulo,'Título',200),text(req.body.descricao,'Descrição',10000)])).rows[0];res.status(201).json(row);
+    const row=await db.transaction(async tx=>{
+      const allowed=(await tx.query('SELECT e.id,l.zona_id FROM elevadores e JOIN locais l ON l.id=e.local_id JOIN cliente_locais cl ON cl.local_id=e.local_id WHERE e.id=$1 AND e.ativo AND cl.cliente_matricula=$2',[lift,req.user.matricula])).rows;
+      insist(allowed.length,404,'Elevador não encontrado nos seus locais.');
+      const row=(await tx.query('INSERT INTO solicitacoes_clientes(cliente_matricula,elevador_id,titulo,descricao) VALUES ($1,$2,$3,$4) RETURNING id',[req.user.matricula,lift,text(req.body.titulo,'Título',200),text(req.body.descricao,'Descrição',10000)])).rows[0];
+      const zona=allowed[0].zona_id;
+      await notify(tx,{usuarios:await managers(tx,zona),zona,solicitacao:row.id,ator:req.user.matricula,tipo:'nova_solicitacao',titulo:'Nova solicitação de cliente #'+row.id,mensagem:'Uma solicitação da sua área aguarda triagem. Defina prioridade, prazo e equipe.',gravidade:'atencao',chave:'solicitacao:'+row.id});
+      return row;
+    });res.status(201).json(row);
   });
   api.post('/portal/solicitacoes/:id/lembrete',async(req,res)=>{
     const row=await db.transaction(async tx=>{
       const s=await ownRequest(tx,req.params.id,req.user,true);insist(s.status==='aguardando_triagem',409,'A solicitação já recebeu um retorno da empresa.');
       insist(!s.ultimo_lembrete||Date.now()-new Date(s.ultimo_lembrete).getTime()>=3600000,429,'Aguarde uma hora entre lembretes desta solicitação.');
-      return (await tx.query('INSERT INTO lembretes_solicitacoes(solicitacao_id,cliente_matricula) VALUES ($1,$2) RETURNING id,data',[s.id,req.user.matricula])).rows[0];
+      const reminder=(await tx.query('INSERT INTO lembretes_solicitacoes(solicitacao_id,cliente_matricula) VALUES ($1,$2) RETURNING id,data',[s.id,req.user.matricula])).rows[0];
+      await notify(tx,{usuarios:await managers(tx,s.zona_id),zona:s.zona_id,solicitacao:s.id,ator:req.user.matricula,tipo:'lembrete_cliente',titulo:'Cliente solicita retorno da solicitação #'+s.id,mensagem:'Há um novo lembrete do cliente. A solicitação ainda aguarda triagem.',gravidade:'atencao',chave:'lembrete:'+reminder.id});
+      return reminder;
     });res.status(201).json(row);
   });
   api.get('/solicitacoes',async(req,res)=>{supervisor(req.user);res.json({solicitacoes:await internalRequests(db,req.user)});});

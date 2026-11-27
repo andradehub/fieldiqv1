@@ -1,3 +1,4 @@
+import {notificationBell} from './notifications.js';
 import {state,isSupervisor,canEdit,canClose,isOnTicket,attendanceWorker,personName,zoneName,team} from '../core/state.js';
 import {esc,fmtDate,fmtTime,currentPeriod,dueAt} from '../core/format.js';
 import {icon,heading,button,iconButton,badge,avatar,statusBadge,priorityBadge,workBadge,slaBadge,slaCell,emptyState,panelHeader,options,STATUS,PRIORITIES,WORKS,notice} from '../components/ui.js';
@@ -116,7 +117,7 @@ export function renderTicketDialog(){
   const ownIntervals=current.intervals?.filter(a=>a.tecnico_matricula===attendanceWorker(c))??[];
   const ownActive=ownIntervals.some(a=>!a.encerrado_em);
   const tabs={overview:'Visão geral',edit:'Atendimento',files:'Anexos'+(c.total_anexos?' ('+c.total_anexos+')':''),history:'Histórico'};
-  return `<div class="sheet-header"><div><div class="sheet-eyebrow">CHAMADO #${c.id} · ${esc(c.elevador_codigo)}</div><h2 id="ticket-title">${esc(c.titulo)}</h2><div class="sheet-tags">${statusBadge(c.status)}${priorityBadge(c.prioridade)}<span id="ticket-sla">${slaBadge(c)}</span></div></div>${iconButton('X','Fechar detalhes do chamado','close-ticket')}</div>
+  return `<div class="sheet-header"><div><div class="sheet-eyebrow">CHAMADO #${c.id} · ${esc(c.elevador_codigo)}</div><h2 id="ticket-title">${esc(c.titulo)}</h2><div class="sheet-tags">${statusBadge(c.status)}${priorityBadge(c.prioridade)}<span id="ticket-sla">${slaBadge(c)}</span></div></div><div class="sheet-header-actions">${notificationBell()}${iconButton('X','Fechar detalhes do chamado','close-ticket')}</div></div>
     <div class="sheet-tabs tabs">${Object.entries(tabs).map(([key,label])=>`<button type="button" class="tab ${current.tab===key?'is-active':''}" data-action="ticket-tab" data-tab="${key}" aria-pressed="${current.tab===key}">${label}</button>`).join('')}</div>
     <div class="sheet-body" id="ticket-body">${current.tab==='overview'?renderOverview(c):current.tab==='edit'?renderEdit(c):current.tab==='files'?renderAttachments(c):renderHistory(c)}</div>
     <div class="sheet-footer"><span>${icon('CalendarDays',15)} Aberto em ${fmtDate(c.aberto_em,{dateOnly:true})}</span><div>${button('Fechar',{action:'close-ticket'})}

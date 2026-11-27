@@ -17,6 +17,7 @@ O projeto usa PostgreSQL persistente, API Node.js / Express e interface HTML, CS
 - [Anexos e visualização de imagens](#anexos-e-visualização-de-imagens)
 - [Portal do cliente e triagem](#portal-do-cliente-e-triagem)
 - [Identificação de recorrências](#identificação-de-recorrências)
+- [Central de notificações](#central-de-notificações)
 - [Revisão dos pedidos e pendências](docs/REVISAO-DE-REQUISITOS.md)
 - [Segurança e privacidade](docs/SEGURANCA-E-PRIVACIDADE.md)
 - [Dados da demonstração e escopo atual](#dados-da-demonstração-e-escopo-atual)
@@ -304,6 +305,12 @@ A indicação é apenas um direcionamento: o técnico deve avaliar o equipamento
 
 A versão atual funciona **sem LLM, chave externa ou envio de textos a um provedor generativo**. O complemento opcional anterior foi removido. Variáveis antigas de provedor não o reativam. Nomes históricos como `sugestoes_ia` e `avaliacoes_ia` permanecem para preservar os registros existentes. Implementação: [server/ai.mjs](server/ai.mjs).
 
+## Central de notificações
+
+Sino no topo e nos detalhes do chamado, painel lateral no computador e tela completa no celular. Contador de não lidas, histórico persistente, filtros, paginação e leitura individual/coletiva. Avisos breves pessoais/críticos são silenciosos. A central preserva o atendimento aberto e isola destinatário, perfil e zona.
+
+Atribuição, equipe, liberação, solicitações e lembretes dos clientes geram notificações na transação da ação. O servidor local avalia SLA a cada minuto: confirmação ao assumir, aviso em 75% e no vencimento, sem repetir por destinatário/prazo/etapa. Agendamento externo exige configuração própria pela rota protegida; push permanece em implementação nesta etapa. Consulte [Notificações](docs/NOTIFICACOES.md).
+
 ## Dados da demonstração e escopo atual
 
 A versão final do TCC não oferece importação de chamados nem migração de bases externas. O menu, as rotas, o leitor CSV/Excel/JSON, o conversor de arquivos e os exemplos de upload foram retirados. Os cadastros são feitos nas telas da aplicação; o histórico cresce com os atendimentos registrados. A demonstração inicial usa os dados fictícios de server/seed.mjs, criados somente quando a base está vazia.
@@ -365,6 +372,7 @@ As views `vw_chamados_metricas_base` e `vw_chamados_metricas` agregam identifica
 | [004-clientes.sql](database/004-clientes.sql) | Perfil Cliente, vínculos, solicitações e lembretes. |
 | [005-responsabilidade.sql](database/005-responsabilidade.sql) | Corrigir chamados Em andamento sem responsável, preservando histórico e prazos. |
 | [006-prioridades-abc.sql](database/006-prioridades-abc.sql) | Converter prioridades para A/B/C sem reiniciar SLA, períodos ou datas. |
+| [007-notificacoes.sql](database/007-notificacoes.sql) | Histórico individual, leitura e deduplicação de notificações. |
 
 O inicializador aplica cada migração pendente uma vez, em transação. Alterações posteriores de esquema devem receber arquivo novo e entrada na lista do inicializador.
 
@@ -512,6 +520,10 @@ A rota antiga `POST /equipe` não deve ser usada para transferências. Ela bloqu
 | `DELETE /anexos/:id` | Excluir anexo permitido, com histórico. |
 | `POST /chamados/:id/sugestao` | Recuperar evidências e gerar análise de recorrência. |
 | `POST /sugestoes/:id/avaliacao` | Registrar `util: true` ou `false`. |
+| `GET /notificacoes` | Histórico e contador do próprio usuário; status, pagina e limite. |
+| `PATCH /notificacoes/:id` | Alternar leitura individual. |
+| `PATCH /notificacoes/lidas` | Marcar como lidas até o último ID consultado. |
+| `GET /tarefas/notificacoes` | Agendador com CRON_SECRET; não aceita sessão comum. |
 | `GET /banco` | Catálogo e informações do banco. |
 | `GET /banco/:table` | Consultar tabela permitida no escopo. |
 | `GET /banco/export` | Exportar SQL de domínio. |
@@ -540,7 +552,7 @@ npm test
 npm run build
 ```
 
-A revisão atual inclui **39 arquivos JavaScript e 32 testes automatizados**, além do build. Os testes cobrem autenticação, autorização por zona/perfil, cargos, clientes, equipes, desatribuição, anexos, SLA, métricas, retirada das rotas de importação, preservação dos dados, exportação e persistência/atualização de banco.
+A revisão atual inclui **43 arquivos JavaScript e 38 testes automatizados**, além do build. Os testes cobrem autenticação, autorização por zona/perfil, cargos, clientes, equipes, desatribuição, anexos, SLA, métricas, retirada das rotas de importação, preservação dos dados, exportação e persistência/atualização de banco.
 
 ### Interface
 
@@ -609,7 +621,7 @@ A API serverless usa [api/index.mjs](api/index.mjs). Não coloque credenciais em
 - A exportação SQL de domínio não substitui backup completo.
 - PGlite local atende ao desenvolvimento/demonstração em um processo; múltiplas instâncias exigem banco compartilhado apropriado.
 - Testes de nuvem e de dispositivos físicos permanecem separados das verificações locais registradas.
-- Central de notificações, lembretes automáticos e push ainda não foram implementados; consulte a [lista completa de pendências](docs/REVISAO-DE-REQUISITOS.md#o-que-continua-pendente).
+- Push e publicação externa permanecem em implementação; central, eventos e alertas locais já possuem implementação e testes. Consulte a [lista completa de pendências](docs/REVISAO-DE-REQUISITOS.md#o-que-continua-pendente).
 
 ## Histórico e manutenção no GitHub
 

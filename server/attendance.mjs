@@ -1,4 +1,5 @@
 import {insist,getTicket,canEdit,canClose,manages,integer,oneOf,optionalText,text} from './permissions.mjs';
+import {notifyAssignment,notifyTeam} from './notifications.mjs';
 
 export async function closeIntervals(db,id){await db.query('UPDATE atendimentos SET encerrado_em=now() WHERE chamado_id=$1 AND encerrado_em IS NULL',[id]);}
 export async function beginInterval(db,ticket,user){
@@ -27,6 +28,7 @@ export function registerAttendanceRoutes(api,db){
         await tx.query("UPDATE chamados SET tecnico_matricula=NULL,status='aberto',revisao=revisao+1 WHERE id=$1",[c.id]);
       }
       await tx.query('INSERT INTO historico_chamados(chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)',[c.id,req.user.matricula,action==='assumir'?'Responsabilidade assumida pelo técnico. O atendimento ainda não foi iniciado.':'Responsabilidade liberada. Chamado aberto e disponível; períodos pausados, sem alterar o SLA.']);
+      await notifyAssignment(tx,c,req.user,{anterior:c.tecnico_matricula,atual:action==='assumir'?req.user.matricula:null,assumido:action==='assumir',chave:'responsavel:'+c.id+':'+(c.revisao+1)});
       return {id:c.id,revisao:c.revisao+1};
     });res.json(result);
   });
@@ -41,6 +43,7 @@ export function registerAttendanceRoutes(api,db){
       await tx.query('UPDATE atendimentos SET encerrado_em=now() WHERE chamado_id=$1 AND tecnico_matricula=$2 AND encerrado_em IS NULL',[c.id,mat]);
       await tx.query('UPDATE chamados SET revisao=revisao+1 WHERE id=$1',[c.id]);
       await tx.query('INSERT INTO historico_chamados(chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)',[c.id,req.user.matricula,'Participação encerrada na equipe: '+mat+'. Períodos de trabalho preservados.']);
+      await notifyTeam(tx,c,req.user,mat,false,'equipe:'+c.id+':'+(c.revisao+1));
     });res.json({ok:true});
   });
   api.post('/chamados/:id/equipe',async(req,res)=>{
@@ -59,6 +62,7 @@ export function registerAttendanceRoutes(api,db){
         await tx.query("UPDATE chamados SET tecnico_matricula=$1,status='aberto',revisao=revisao+1 WHERE id=$2",[matricula,c.id]);
         await tx.query('DELETE FROM equipe_chamado WHERE chamado_id=$1 AND tecnico_matricula=$2',[c.id,matricula]);
         await tx.query('INSERT INTO historico_chamados(chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)',[c.id,req.user.matricula,'Responsável principal definido pela gestão: '+person.nome+' ('+matricula+'). O atendimento ainda não foi iniciado.']);
+        await notifyAssignment(tx,c,req.user,{atual:matricula,chave:'responsavel:'+c.id+':'+(c.revisao+1)});
         return {id:c.id,revisao:c.revisao+1,responsavel:true};
       }
       if(matricula===c.tecnico_matricula)return {id:c.id,revisao:c.revisao};
@@ -66,6 +70,7 @@ export function registerAttendanceRoutes(api,db){
       if(added.rows.length){
         await tx.query('UPDATE chamados SET revisao=revisao+1 WHERE id=$1',[c.id]);
         await tx.query('INSERT INTO historico_chamados(chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)',[c.id,req.user.matricula,'Participante adicionado à equipe: '+person.nome+' ('+matricula+')']);
+        await notifyTeam(tx,c,req.user,matricula,true,'equipe:'+c.id+':'+(c.revisao+1));
       }
       return {id:c.id,revisao:c.revisao+Number(added.rows.length>0)};
     });res.json(result);

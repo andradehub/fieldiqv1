@@ -41,11 +41,12 @@ Revisão de 26/11/2026. Esta lista compara os pedidos da conversa com a implemen
 | README, linguagens e motivos dos commits | README descreve funções, permissões, arquitetura e linguagens. CONTRIBUTING/CHANGELOG registram a justificativa das mudanças. Dados locais, sessões e segredos ficam fora do GitHub. |
 | Retirar importação | Retirada por solicitação posterior explícita: menu, rotas, leitura e arquivos de exemplo indisponíveis. Pedidos antigos de unificar importação ou entregar JSON importável foram substituídos por essa decisão. Dados já cadastrados preservados. |
 
+## Evolução em 27/11/2026
+
+Central individual, eventos de atribuição/equipe/cliente e rotina local de SLA implementados nesta etapa. A apresentação escolhida é o painel pelo sino, com histórico no próprio painel. Detalhes e limites em [Notificações](NOTIFICACOES.md).
+
 ## O que continua pendente
 
-1. **Central de notificações dentro da aplicação:** sino, contador de não lidas, histórico, marcar como lida e acesso ao chamado relacionado. O toast de confirmação atual não substitui essa central.
-2. **Eventos de notificação:** avisar o técnico incluído/atribuído; avisar o supervisor sobre novas solicitações, lembretes dos clientes, alterações de responsável/equipe e chamados sem responsável. Hoje o histórico registra ações e o painel mostra solicitações/lembretes, mas isso não gera notificações individuais.
-3. **Lembretes automáticos e alertas de SLA:** rotina no servidor, controle de duplicação e encerramento dos lembretes após resolução/cancelamento. A recomendação discutida foi aviso ao assumir, em 75% do prazo e ao vencer; os alertas ainda não são enviados.
 4. **Push no celular:** service worker, inscrições dos dispositivos, envio Web Push, chaves/configuração, revogação e testes. O recurso ainda não está preparado nem ativado. Instalar uma biblioteca não conclui essa implementação. Endereço HTTPS e autorização do navegador também serão necessários; o usuário informou ainda não possuir endereço publicado para isso. HTTP por IP da rede local não oferece essa entrega no celular.
 5. **Demonstração ampliada reproduzível em uma instalação nova:** o seed versionado cria 17 chamados, 10 zonas e 11 contas, sem fotos iniciais ou contatos completos de todos. A base local pode conter mais cadastros já existentes, mas não é enviada ao GitHub. O pedido antigo de um conjunto amplo com fotos e cadastros completos ainda não está integralmente incorporado ao seed; o arquivo de importação foi retirado junto da funcionalidade. Isso pode ser concluído futuramente sem restaurar importação.
 6. **Publicação e verificação da Vercel:** a prévia automática acionada pelo commit `af36bb0` recebeu status de falha no GitHub. A causa não foi confirmada: consultar os logs pela CLI exige autenticação que não está disponível neste ambiente. A versão local na rede foi validada; a implantação externa permanece pendente e não deve ser apresentada como concluída.

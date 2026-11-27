@@ -2,6 +2,14 @@
 
 Este histórico registra o problema que motivou cada entrega e seu efeito na aplicação. Os commits publicados mantêm seus identificadores; as explicações abaixo complementam suas mensagens.
 
+## 2026-11-27 — central individual, eventos e lembretes locais de SLA
+
+**Motivo:** histórico do chamado e confirmações breves não avisavam cada colaborador nem organizavam pendências pessoais. O responsável escolheu sino com painel lateral/tela inteira e avisos sem som, mantendo o fluxo de 75% do SLA e vencimento.
+
+**Alterações:** migração 007 para notificações persistentes e deduplicadas; central com filtros, contador, paginação e leitura. Atribuição, equipe, liberação, solicitação e lembrete de cliente geram avisos na mesma transação da ação. A rotina local avalia SLA a cada minuto e possui rota protegida para agendamento externo. Notificações são limitadas a destinatário, perfil e zona; ações próprias não exibem toast redundante. Consultar a central dentro do chamado preserva o rascunho. Documentação de referências e comportamento em [Notificações](docs/NOTIFICACOES.md).
+
+**Verificação:** regras de destinatário, leitura, concorrência com novos avisos, eventos por zona e limiares de 75%/vencimento testados com relógio controlado e banco isolado. Interface exercitada em Edge/WebKit, com filtro, leitura, vínculo ao chamado e troca de conta. Resultados finais desta etapa registrados no commit; push, agendamento remoto e publicação continuam como etapas seguintes.
+
 ## 2026-11-26 — revisão visual, inclusão pela supervisão e conferência dos pedidos
 
 **Motivo:** cabeçalhos ordenáveis usavam botões sem estilo; prioridades antigas eram mostradas como códigos em minúsculas e faziam a seta mudar sem reorganizar chamados. Supervisores não tinham o seletor de inclusão de técnicos. Outros pedidos recentes estavam apenas parcialmente implementados e sem uma relação honesta das pendências.

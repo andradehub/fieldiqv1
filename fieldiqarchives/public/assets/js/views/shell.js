@@ -1,3 +1,4 @@
+import {notificationBell} from './notifications.js';
 import {state,routes,isSupervisor,isAdmin,roleName,regionName,zoneName} from '../core/state.js';
 import {esc} from '../core/format.js';
 import {icon,brandMark,avatar,button,iconButton} from '../components/ui.js';
@@ -47,7 +48,7 @@ export function renderTopbar(){
     <nav class="breadcrumb" aria-label="Localização"><span>${route.section}</span>${icon('ChevronRight',14)}<strong>${route.label}</strong></nav></div>
     <div class="topbar__right"><form class="topbar-search" data-form="global-search" role="search">${icon('Search',17)}<input id="global-search" name="search" aria-label="Buscar chamado ou elevador" placeholder="Buscar chamado ou elevador"></form>
     ${state.config.demo?`<span class="topbar-demo">${icon('FlaskConical',14)}Demonstração</span>`:''}
-    <span class="topbar-divider"></span>${iconButton('RefreshCw','Atualizar dados','refresh')}
+    <span class="topbar-divider"></span>${notificationBell()}${iconButton('RefreshCw','Atualizar dados','refresh')}
     <button class="topbar-user" type="button" data-route="perfil" aria-label="Abrir meu perfil">${avatar(state.user,'small')}</button></div>`;
 }
 export function renderBottomNav(){
