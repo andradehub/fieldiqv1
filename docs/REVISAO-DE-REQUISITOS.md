@@ -1,6 +1,6 @@
 # Revisão dos pedidos do FieldIQ
 
-Revisão de 26/11/2026. Esta lista compara os pedidos da conversa com a implementação e os testes da branch `codex/banco-e-recorrencias`. A existência de código parcial ou de uma dependência instalada não conta como funcionalidade entregue. Publicar a branch, integrar à `main` e disponibilizar um endereço HTTPS são etapas diferentes.
+Revisão atualizada em 27/11/2026. Esta lista compara os pedidos da conversa com a implementação e os testes da branch `codex/banco-e-recorrencias`. A existência de código parcial ou de uma dependência instalada não conta como funcionalidade entregue. Publicar a branch, integrar à `main` e disponibilizar um endereço HTTPS são etapas diferentes.
 
 ## Problemas corrigidos nesta revisão
 
@@ -43,13 +43,17 @@ Revisão de 26/11/2026. Esta lista compara os pedidos da conversa com a implemen
 
 ## Evolução em 27/11/2026
 
-Central individual, eventos de atribuição/equipe/cliente e rotina local de SLA implementados nesta etapa. A apresentação escolhida é o painel pelo sino, com histórico no próprio painel. Detalhes e limites em [Notificações](NOTIFICACOES.md).
+Central individual, eventos de atribuição/equipe/cliente e rotina local de SLA implementados e testados. A apresentação escolhida é o painel pelo sino, com histórico no próprio painel, sem página adicional. Detalhes em [Notificações](NOTIFICACOES.md).
+
+Web Push implementado: service worker, manifesto/ícones, ativação voluntária em Meu perfil, inscrição individual, fila persistente, retentativas, revogação e conteúdo genérico. Testes de API e navegador usam entrega simulada, com criptografia real do transporte. [Configuração e limites](PUSH-E-PUBLICACAO.md).
+
+Demonstração ampliada incorporada ao código: instalação nova com 177 chamados, 51 contas, avatares ilustrados e contatos fictícios, em dez zonas. Ampliação explícita/idempotente para bases anteriores, sem restaurar importação. [Dados de demonstração](DADOS-DEMONSTRACAO.md).
 
 ## O que continua pendente
 
-4. **Push no celular:** service worker, inscrições dos dispositivos, envio Web Push, chaves/configuração, revogação e testes. O recurso ainda não está preparado nem ativado. Instalar uma biblioteca não conclui essa implementação. Endereço HTTPS e autorização do navegador também serão necessários; o usuário informou ainda não possuir endereço publicado para isso. HTTP por IP da rede local não oferece essa entrega no celular.
-5. **Demonstração ampliada reproduzível em uma instalação nova:** o seed versionado cria 17 chamados, 10 zonas e 11 contas, sem fotos iniciais ou contatos completos de todos. A base local pode conter mais cadastros já existentes, mas não é enviada ao GitHub. O pedido antigo de um conjunto amplo com fotos e cadastros completos ainda não está integralmente incorporado ao seed; o arquivo de importação foi retirado junto da funcionalidade. Isso pode ser concluído futuramente sem restaurar importação.
-6. **Publicação e verificação da Vercel:** a prévia automática acionada pelo commit `af36bb0` recebeu status de falha no GitHub. A causa não foi confirmada: consultar os logs pela CLI exige autenticação que não está disponível neste ambiente. A versão local na rede foi validada; a implantação externa permanece pendente e não deve ser apresentada como concluída.
+1. **Ativação real do push:** configurar par VAPID privado e contato responsável no servidor publicado, rotina de envio e permissão nos aparelhos. Verificar entrega, abertura e revogação em Android/iPhone físicos. HTTP por IP local não oferece push móvel; os testes simulados aprovados não substituem essa etapa.
+2. **Publicação e banco remoto:** resolver a falha da prévia Vercel, validar PostgreSQL persistente com TLS e configurar o agendador externo autenticado. A falha do commit `af36bb0` foi confirmada pelo status do GitHub, mas a causa exige logs autenticados. A integração Vercel foi localizada e sua instalação/autorização solicitada ao responsável; ainda não há acesso confirmado. Não houve implantação externa validada.
+3. **Validação física e operacional:** conferir responsividade e permissões em aparelhos reais, persistência/recuperação do banco remoto e rotina de notificações com a aplicação fechada.
 
 ## Limites da verificação e etapas externas
 

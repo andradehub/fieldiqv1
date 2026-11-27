@@ -1,7 +1,7 @@
 import {once} from 'node:events';import {mkdir,writeFile} from 'node:fs/promises';import path from 'node:path';import assert from 'node:assert/strict';
 import {createDatabase,projectRoot} from '../server/db.mjs';import {createApp} from '../server/app.mjs';import {notify} from '../server/notifications.mjs';import AxeBuilder from '@axe-core/playwright';
 process.env.PLAYWRIGHT_BROWSERS_PATH=path.join(projectRoot,'.fieldiq','browsers');const {chromium,webkit}=await import('playwright');
-const db=await createDatabase({dataDir:'memory://',demo:true}),server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');const base='http://127.0.0.1:'+server.address().port,output=path.join(projectRoot,'test-results','notifications');await mkdir(output,{recursive:true});
+const db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false}),server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');const base='http://127.0.0.1:'+server.address().port,output=path.join(projectRoot,'test-results','notifications');await mkdir(output,{recursive:true});
 for(let i=0;i<21;i++)await notify(db,{usuarios:['TK-CAP-SUP-01'],zona:'cap-04',chamado:5,tipo:i?'atribuicao':'sla_vencido',titulo:i?'Você foi incluído no chamado #5':'Prazo de resolução excedido',mensagem:i?'Confira o chamado e organize seu atendimento.':'O prazo precisa de atenção. Verifique a equipe e as próximas ações.',gravidade:i?'info':'critica',chave:'visual-'+i});
 const errors=[],scans=[];
 try{

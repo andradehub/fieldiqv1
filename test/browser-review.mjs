@@ -6,7 +6,7 @@ import AxeBuilder from '@axe-core/playwright';
 import {chromium} from 'playwright';
 import {createDatabase,projectRoot} from '../server/db.mjs';
 import {createApp} from '../server/app.mjs';
-const db=await createDatabase({dataDir:'memory://',demo:true}),server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');
+const db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false}),server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');
 const base='http://127.0.0.1:'+server.address().port,output=path.join(projectRoot,'test-results','review');await mkdir(output,{recursive:true});
 const browser=await chromium.launch({channel:'msedge',headless:true}),errors=[],scans=[],captures=[];
 async function nav(page,route){if(await page.locator('#sidebar').evaluate(n=>n.inert))await page.locator('#menu-toggle').click();await page.locator('#sidebar [data-route="'+route+'"]').first().click();}

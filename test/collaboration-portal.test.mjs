@@ -9,7 +9,7 @@ async function request(route,{cookie=admin,method='GET',body}={}){
  return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};
 }
 async function login(login,senha='tk2026'){const r=await request('/auth/login',{method:'POST',body:{login,senha}});assert.equal(r.status,200);return r.cookie;}
-before(async()=>{db=await createDatabase({dataDir:'memory://',demo:true});server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');base='http://127.0.0.1:'+server.address().port;admin=await login('administrativo');ana=await login('ana.capital');carlos=await login('tecnico.capital');supervisor=await login('supervisor.capital');interior=await login('supervisor.interior');client=await login('cliente.barra');});
+before(async()=>{db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false});server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');base='http://127.0.0.1:'+server.address().port;admin=await login('administrativo');ana=await login('ana.capital');carlos=await login('tecnico.capital');supervisor=await login('supervisor.capital');interior=await login('supervisor.interior');client=await login('cliente.barra');});
 after(async()=>{await new Promise(r=>server.close(r));await db.close();});
 test('cargos são restritos ao perfil, incluindo estagiário de campo; nomes legados podem permanecer',async()=>{
  const post=body=>request('/usuarios',{method:'POST',body:{matricula:'INTERN-TEST',nome:'Estagiário fictício',role:'tecnico',cargo:'Estagiário de campo',cpf:'11144477735',login:'intern.teste',senha:'senha-estagiario-123',ativo:true,zona_id:'cap-04',...body}});

@@ -9,7 +9,7 @@ import {createApp} from '../server/app.mjs';
 const localBrowsers=path.join(projectRoot,'.fieldiq','browsers');
 if(existsSync(localBrowsers))process.env.PLAYWRIGHT_BROWSERS_PATH=localBrowsers;
 const {chromium,webkit}=await import('playwright');
-const db=await createDatabase({dataDir:'memory://',demo:true});
+const db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false});
 const server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');
 const base='http://127.0.0.1:'+server.address().port;
 const directory=path.join(projectRoot,'test-results','redesign');

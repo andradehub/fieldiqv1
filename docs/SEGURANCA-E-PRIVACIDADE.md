@@ -40,7 +40,7 @@ Uma implantação real exige definir finalidade/base legal, prazo de retenção,
 
 A identificação de recorrências é local: normalização, TF-IDF, similaridade de cosseno, termos de componentes e referências aos chamados anteriores da zona. Não existe chamada a LLM nesta versão, mesmo que configurações antigas de provedor permaneçam no ambiente. Os nomes históricos `sugestoes_ia`/`avaliacoes_ia` foram mantidos para preservar os dados e os relacionamentos.
 
-Push é uma pendência de implementação. Antes de ativá-lo, as inscrições precisam pertencer ao usuário correto, ser revogáveis e evitar dados pessoais nas telas bloqueadas. Também exige contexto seguro e integração com service worker, conforme [MDN — Push API](https://developer.mozilla.org/en-US/docs/Web/API/Push_API).
+Web Push possui inscrições por usuário/dispositivo, revogação no logout e nas alterações de credenciais/perfil/zona, corpo cifrado e genérico sem dados do cliente. O servidor aceita somente endpoints HTTPS de serviços permitidos; controla quantidade, retentativas e validade. A chave VAPID privada não chega ao navegador. O service worker confere um vínculo opaco do dispositivo e não guarda páginas ou API em cache. Abrir o aviso requer autorização novamente; inscrições e fila não integram o catálogo compartilhado. Implementação e limites em [Push e publicação](PUSH-E-PUBLICACAO.md). Contexto seguro e integração com service worker são requisitos descritos em [MDN — Push API](https://developer.mozilla.org/en-US/docs/Web/API/Push_API). Os testes simulam entrega; publicação e teste físico continuam pendentes.
 
 ## Evidências de testes para explicar no TCC
 

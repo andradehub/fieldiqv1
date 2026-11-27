@@ -15,7 +15,7 @@ async function call(route,{cookie=admin,body,method='GET',bytes,name}={}){
 }
 async function login(who,password='tk2026'){const r=await call('/auth/login',{method:'POST',body:{login:who,senha:password}});assert.equal(r.status,200);return r.cookie;}
 before(async()=>{
-  db=await createDatabase({dataDir:'memory://',demo:true});server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');base='http://127.0.0.1:'+server.address().port;
+  db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false});server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');base='http://127.0.0.1:'+server.address().port;
   admin=await login('administrativo');supervisor=await login('supervisor.capital');tech=await login('tecnico.capital');ana=await login('ana.capital');interior=await login('supervisor.interior');
 });
 after(async()=>{if(server)await new Promise(r=>server.close(r));if(db)await db.close();});
@@ -120,5 +120,5 @@ test('migração de esquema preserva banco da versão anterior e não reaplica a
   assert.deepEqual(migrated.map(c=>c.prioridade),['A','A','B','C']);
   for(let i=0;i<before.length;i++)for(const key of Object.keys(before[i]).filter(k=>k!=='prioridade'))assert.deepEqual(migrated[i][key],before[i][key],'Migração alterou '+key);
   await upgraded.close();
-  upgraded=await createDatabase({dataDir:folder,demo:false});try{assert.equal((await upgraded.query('SELECT * FROM schema_migrations')).rows.length,7);}finally{await upgraded.close();}
+  upgraded=await createDatabase({dataDir:folder,demo:false});try{assert.equal((await upgraded.query('SELECT * FROM schema_migrations')).rows.length,9);}finally{await upgraded.close();}
 });

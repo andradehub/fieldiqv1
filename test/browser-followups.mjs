@@ -7,7 +7,7 @@ import {createApp} from '../server/app.mjs';
 import AxeBuilder from '@axe-core/playwright';
 process.env.PLAYWRIGHT_BROWSERS_PATH=path.join(projectRoot,'.fieldiq','browsers');
 const {chromium,webkit}=await import('playwright');
-const db=await createDatabase({dataDir:'memory://',demo:true}),server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');
+const db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false}),server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');
 const base='http://127.0.0.1:'+server.address().port,output=path.join(projectRoot,'test-results','followups');await mkdir(output,{recursive:true});
 const errors=[],scans=[];
 async function check(page,label){

@@ -14,7 +14,7 @@ async function request(route,{cookie,method='GET',body,origin}={}) {
 }
 async function login(login){const result=await request('/auth/login',{method:'POST',body:{login,senha:'tk2026'}});assert.equal(result.status,200);return result.cookie;}
 before(async()=>{
-  db=await createDatabase({dataDir:'memory://',demo:true});
+  db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false});
   server=createApp(db).listen(0,'127.0.0.1');
   await once(server,'listening');
   base='http://127.0.0.1:'+server.address().port;
@@ -114,7 +114,7 @@ test('consulta e exportação mostram dados reais sem sessões ou hashes',async(
 test('dados persistem depois de fechar e reabrir o PostgreSQL local',async()=>{
   await mkdir(path.join(projectRoot,'test-results'),{recursive:true});
   const dir=await mkdtemp(path.join(projectRoot,'test-results','persist-'));
-  let disk=await createDatabase({dataDir:dir,demo:true});
+  let disk=await createDatabase({dataDir:dir,demo:true,expandedDemo:false});
   const ticket=(await disk.query('SELECT id,revisao FROM chamados WHERE id=5')).rows[0];
   await disk.query('UPDATE chamados SET descricao=$1 WHERE id=$2',['Persistência confirmada após reiniciar.',ticket.id]);
   await assert.rejects(createDatabase({dataDir:dir,demo:false}),/Banco local em uso/);

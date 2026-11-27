@@ -25,6 +25,11 @@ export function createNotificationCenter({toast,navigate,openTicket,reload}){
   function stop(){clearInterval(timer);controller?.abort();user=null;epoch++;request++;latest=null;busy=false;dialog.close();dialog.innerHTML='';state.ui.notifications=fresh();bell();}
   function start(){if(!state.user||state.user.role==='cliente'||!state.config.notificacoes)return;if(user===state.user.matricula)return;stop();user=state.user.matricula;void load();timer=setInterval(()=>{if(!document.hidden&&!busy)void load({poll:true});},20000);}
   function open(){if(!user)return;dialog.innerHTML=renderNotifications();if(!dialog.open)dialog.showModal();void load();}
+  async function fromPush(id){
+    if(!user||!Number.isInteger(Number(id))||Number(id)<1)return;
+    if(document.getElementById('ticket-dialog').open||document.getElementById('utility-dialog').open){toast('Há uma atualização na central. Termine ou salve o formulário atual e consulte o sino.');void load({poll:true});return;}
+    try{const current=epoch,item=await api('/notificacoes/'+Number(id));if(current===epoch)await follow(item);}catch(error){toast(error.message);}
+  }
   async function follow(item){
     if(!item)return;
     const ticket=state.ui.ticket,dirty=ticket&&Object.entries(ticket.draft).some(([key,value])=>String(value??'')!==String(ticket.record[key]??''));
@@ -37,7 +42,7 @@ export function createNotificationCenter({toast,navigate,openTicket,reload}){
   document.addEventListener('click',event=>{
     const target=event.target.closest('[data-notification]');if(!target||!state.user)return;
     const action=target.dataset.notification,n=state.ui.notifications;
-    if(action==='open'){open();return;}if(action==='close'){dialog.close();return;}if(busy)return;
+    if(action==='open'){open();return;}if(action==='close'){dialog.close();return;}if(action==='settings'){dialog.close();navigate('perfil');return;}if(busy)return;
     if(action==='filter'){n.filter=target.dataset.value;n.page=1;void load();return;}
     if(action==='page'){n.page=Number(target.dataset.value);void load();return;}
     if(action==='refresh'){void load();return;}
@@ -52,5 +57,5 @@ export function createNotificationCenter({toast,navigate,openTicket,reload}){
       finally{if(current===epoch){busy=false;n.busy=false;draw();}}
     })();
   });
-  return {start,stop,open,load,follow};
+  return {start,stop,open,load,follow,fromPush};
 }

@@ -2,6 +2,16 @@
 
 Este histórico registra o problema que motivou cada entrega e seu efeito na aplicação. Os commits publicados mantêm seus identificadores; as explicações abaixo complementam suas mensagens.
 
+## 2026-11-27 — Web Push e base fictícia reproduzível
+
+**Motivo:** a central interna não entrega avisos com o aplicativo fechado. A demonstração ampla anterior existia apenas na base local e precisava ser reproduzível sem restaurar a importação retirada. O responsável confirmou push genérico na tela bloqueada e avatares ilustrados.
+
+**Alterações:** migrações 008/009, inscrições por dispositivo, fila transacional com retentativas, assinatura/cifragem Web Push, service worker sem cache de páginas/API, manifesto/ícones e preferências em Meu perfil. Consentimento explícito, vínculo opaco, abertura autorizada e revogação no logout/troca de credenciais. Alertas pendentes obsoletos são cancelados. Rotina externa protegida preparada, sem agendamento remoto automático. Seed ampliado versionado com 177 chamados, 51 contas e fotos/contatos fictícios; comando explícito reconhece a ampliação anterior e preserva campos existentes. Biblioteca `web-push` 4.0.0 e licença MPL-2.0 registradas. README, revisão de requisitos e guias de configuração/segurança atualizados.
+
+**Verificação:** 53 arquivos JavaScript, build e 47 testes aprovados. Suítes gerais, operações, tabelas/equipes, rascunhos/portal, central, push e demonstração aprovadas; 86 verificações axe sem violações nos cenários executados, com larguras de 320–1440 px e WebKit em dimensões de iPhone. Push usa serviço simulado: verificados cifragem real, inscrição, propriedade, fila, falhas, vínculo do service worker, abertura e logout. Não houve envio a provedores reais. Base demonstrativa nova validada com 177 chamados/51 contas. Na instância da rede, cópia completa com banco encerrado e comparação anterior/posterior preservaram 179 chamados, históricos/equipes/períodos, 52 pessoas, locais/elevadores, solicitações e campos já preenchidos; apenas dados nulos de identidades conhecidas foram complementados. A demonstração anterior foi reconhecida sem duplicação.
+
+**Limites:** push real permanece desativado na instância HTTP local. HTTPS, par VAPID privado, PostgreSQL remoto, agendador e aparelhos físicos exigem configuração/verificação. Integração Vercel localizada, aguardando instalação/autorização do responsável para consultar a falha da prévia. Não houve merge na main nem implantação externa validada. Esses passos estão detalhados na [revisão de requisitos](docs/REVISAO-DE-REQUISITOS.md).
+
 ## 2026-11-27 — central individual, eventos e lembretes locais de SLA
 
 **Motivo:** histórico do chamado e confirmações breves não avisavam cada colaborador nem organizavam pendências pessoais. O responsável escolheu sino com painel lateral/tela inteira e avisos sem som, mantendo o fluxo de 75% do SLA e vencimento.

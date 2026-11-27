@@ -1,3 +1,5 @@
+import {createPushController} from './core/push.js';
+import {renderPushPreferences} from './views/push.js';
 import {createNotificationCenter} from './core/notifications.js';
 import {state,routes,isSupervisor,isAdmin,acceptData,canEdit} from './core/state.js';
 import {api} from './core/api.js';
@@ -41,9 +43,10 @@ function updateJobChoices(){
 let databaseRequest=0;
 const freshFilters=()=>({search:'',status:'',priority:'',work:'',technician:'',equipment:'',flag:'',period:'all'});
 const freshTicket=()=>({step:1,titulo:'',descricao:'',elevador_id:'',tipo_obra:'mod_parcial',prioridade:'B',sla_horas:24,tecnico:''});
-const views={dashboard:renderDashboard,chamados:renderTickets,meuschamados:renderTickets,perfiltecnico:renderTechnicianProfile,novochamado:renderNewTicket,elevadores:renderAssets,tecnicos:renderTeam,usuarios:renderUsers,solicitacoes:renderRequests,perfil:renderProfile,banco:renderDatabase};
+const views={dashboard:renderDashboard,chamados:renderTickets,meuschamados:renderTickets,perfiltecnico:renderTechnicianProfile,novochamado:renderNewTicket,elevadores:renderAssets,tecnicos:renderTeam,usuarios:renderUsers,solicitacoes:renderRequests,perfil:()=>renderProfile()+renderPushPreferences(),banco:renderDatabase};
 
 const notificationCenter=createNotificationCenter({toast,navigate,openTicket,reload:reloadData});
+const pushController=createPushController({render:renderView,toast,onNotification:notificationCenter.fromPush});
 
 function toast(message){
   $('toast').textContent=message;
@@ -113,6 +116,7 @@ function focusNewStep(){
 function navigate(route,{replace=false,focus=true}={}){
   if(!state.user)return;
   if(route.startsWith('tecnico/')){state.ui.profileRegistration=decodeURIComponent(route.slice(8));route='perfiltecnico';}
+  if(route.startsWith('notificacao/')){const id=Number(route.slice(12));queueMicrotask(()=>void notificationCenter.fromPush(id));route='dashboard';}
   if(!routes[route])route='dashboard';
   if(routes[route].supervisor&&!isSupervisor())route='dashboard';
   if(routes[route].field&&!['tecnico','supervisor'].includes(state.user.role))route='dashboard';
@@ -144,10 +148,12 @@ async function reloadData(){
   if(data.portal){location.replace('/cliente.html');return false;}
   acceptData(data);
   notificationCenter.start();
+  pushController.start();
   state.ui.database.info=null;state.ui.database.data=null;
 }
 function showLogin(){
   notificationCenter.stop();
+  pushController.stop();
   userDrafts.clear();
   $('image-dialog').close();
   disposeCharts();
@@ -367,7 +373,7 @@ document.addEventListener('click',event=>{
   if(action==='retry-ai'){void loadSuggestion();return;}
   void execute(target,action,async()=>{
     if(action==='demo-login'){await enterAccount(target.dataset.login,'tk2026');}
-    else if(action==='logout'){await api('/auth/logout',{method:'POST'});showLogin();}
+    else if(action==='logout'){await pushController.logout();if(state.user)await api('/auth/logout',{method:'POST'});showLogin();}
     else if(action==='ticket-add-member'){
       const c=state.ui.ticket.record,matricula=$('ticket-member')?.value;
       if(!matricula){$('ticket-member')?.focus();toast('Selecione um técnico da zona do chamado.');return;}

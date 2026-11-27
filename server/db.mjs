@@ -1,10 +1,11 @@
+import {seedDemoExtra} from './demo-extra.mjs';
 import { readFile, mkdir, open, unlink } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { seedDatabase } from './seed.mjs';
 
 export const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-const migrations = await Promise.all(['001-schema.sql','002-operacao.sql','003-equipes.sql','004-clientes.sql','005-responsabilidade.sql','006-prioridades-abc.sql','007-notificacoes.sql'].map(async name => ({name,sql:await readFile(new URL('../database/'+name,import.meta.url),'utf8')})));
+const migrations = await Promise.all(['001-schema.sql','002-operacao.sql','003-equipes.sql','004-clientes.sql','005-responsabilidade.sql','006-prioridades-abc.sql','007-notificacoes.sql','008-push.sql','009-demonstracao.sql'].map(async name => ({name,sql:await readFile(new URL('../database/'+name,import.meta.url),'utf8')})));
 export const schemaSQL = migrations.map(m=>m.sql).join('\n');
 
 export async function createDatabase(options = {}) {
@@ -88,6 +89,7 @@ export async function createDatabase(options = {}) {
           await tx.query("INSERT INTO cliente_locais(cliente_matricula,local_id) VALUES ('CLI-DEMO-001',$1)",[local.id]);
         }
       }
+      if(demo&&count.rows[0].n===0&&options.expandedDemo!==false)await seedDemoExtra(tx,options.password??process.env.DEMO_PASSWORD??'tk2026',{fresh:true});
     });
     if (!url) await adapter.query('SET search_path TO fieldiq, public');
     return { ...adapter, demo };

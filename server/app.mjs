@@ -1,3 +1,4 @@
+import {registerPushRoutes} from './push.mjs';
 import {registerNotificationJobRoute} from './notification-jobs.mjs';
 import {registerNotificationRoutes,notifyAssignment} from './notifications.mjs';
 import express from 'express';
@@ -114,7 +115,7 @@ export function createApp(db) {
   app.use('/api',api);
   const cookieOptions = {httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV === 'production',path:'/',maxAge:12*3600000};
   api.get('/health',(_req,res) => res.json({ok:true}));
-  api.get('/config',(_req,res) => res.json({notificacoes:true,demo:db.demo,quickDemo:db.demo && db.kind === 'PostgreSQL local (PGlite)'}));
+  api.get('/config',(_req,res) => res.json({push_configuravel:true,notificacoes:true,demo:db.demo,quickDemo:db.demo && db.kind === 'PostgreSQL local (PGlite)'}));
   const attempts = new Map();
   api.post('/auth/login', async (req,res) => {
     const key = req.ip;
@@ -275,6 +276,7 @@ export function createApp(db) {
     const visible=rows.length?new Set(Object.keys(rows[0])):null;
     res.json({tabela:req.params.table,linhas:rows,colunas:columns.rows.filter(c => !['senha_hash','foto','cpf','login'].includes(c.column_name)&&(!visible||visible.has(c.column_name)))});
   });
+  registerPushRoutes(api,db);
   registerNotificationRoutes(api,db);
   registerUserRoutes(api,db);
   registerTechnicianRoutes(api,db);

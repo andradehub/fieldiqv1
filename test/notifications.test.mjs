@@ -9,7 +9,7 @@ let db,server,base,tech,supervisor,other;
 async function request(route,{cookie=tech,method='GET',body}={}){const r=await fetch(base+'/api'+route,{method,headers:{cookie,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
 async function login(login){return (await request('/auth/login',{method:'POST',body:{login,senha:'tk2026'}})).cookie;}
 const event=(key,extra={})=>({usuarios:['TK-CAP-001'],zona:'cap-04',tipo:'atribuicao',titulo:'Você recebeu um chamado',mensagem:'Confira o atendimento na sua área.',chave:key,...extra});
-before(async()=>{db=await createDatabase({dataDir:'memory://',demo:true});server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');base='http://127.0.0.1:'+server.address().port;tech=await login('tecnico.capital');supervisor=await login('supervisor.capital');other=await login('ana.capital');});
+before(async()=>{db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false});server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');base='http://127.0.0.1:'+server.address().port;tech=await login('tecnico.capital');supervisor=await login('supervisor.capital');other=await login('ana.capital');});
 after(async()=>{await new Promise(r=>server.close(r));await db.close();});
 test('central isola destinatário, zona e conta ativa; uma chave não duplica o mesmo evento',async()=>{
   const ids=await notify(db,event('unico',{usuarios:['TK-CAP-001','TK-CAP-SUP-01','TK-INT-001','TK-CAP-001']}));assert.equal(ids.length,2);assert.deepEqual(await notify(db,event('unico')),[]);

@@ -1,6 +1,7 @@
 import {timingSafeEqual} from 'node:crypto';
 import {notify} from './notifications.mjs';
 import {getTicket,insist} from './permissions.mjs';
+import {deliverPush} from './push-delivery.mjs';
 
 export async function evaluateSla(db,{now=new Date(),limit=500}={}){
   const at=new Date(now);if(!Number.isFinite(at.getTime()))throw Error('Horário de avaliação inválido.');
@@ -31,10 +32,11 @@ function validCron(header){
   const provided=Buffer.from(header??''),expected=Buffer.from('Bearer '+secret);
   return provided.length===expected.length&&timingSafeEqual(provided,expected);
 }
-export function registerNotificationJobRoute(app,db,{run=()=>evaluateSla(db)}={}){
+export async function runNotificationJobs(db){return {...await evaluateSla(db),push:await deliverPush(db)};}
+export function registerNotificationJobRoute(app,db,{run=()=>runNotificationJobs(db)}={}){
   app.get('/api/tarefas/notificacoes',async(req,res)=>{insist(validCron(req.headers.authorization),401,'Rotina não autorizada.');res.json(await run());});
 }
-export function startNotificationJobs(db,{intervalMs=60000,run=()=>evaluateSla(db)}={}){
+export function startNotificationJobs(db,{intervalMs=60000,run=()=>runNotificationJobs(db)}={}){
   let pending=null,stopping=false;
   const tick=()=>{if(stopping||pending)return pending;pending=Promise.resolve().then(run).catch(error=>console.error('Falha na rotina de notificações:',error.code??error.name)).finally(()=>{pending=null;});return pending;};
   const timer=setInterval(tick,intervalMs);timer.unref();void tick();

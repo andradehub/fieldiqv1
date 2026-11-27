@@ -69,7 +69,7 @@ export async function saveUser(db,actor,body,existing=null){
   const values=[name,role,cargo,z?.regiao??null,zone,login,hash,cpf,email,phone,admission,active,mat];
   if(existing){
     await db.query('UPDATE pessoas SET nome=$1,role=$2,cargo=$3,regiao=$4,zona_id=$5,login=$6,senha_hash=$7,cpf=$8,email=$9,telefone=$10,admissao=$11,ativo=$12 WHERE matricula=$13',values);
-    if(body.senha||!active||existing.role!==role||existing.zona_id!==zone)await db.query('DELETE FROM sessoes WHERE usuario_matricula=$1',[mat]);
+    if(body.senha||!active||existing.role!==role||existing.zona_id!==zone){await db.query('DELETE FROM sessoes WHERE usuario_matricula=$1',[mat]);await db.query('DELETE FROM inscricoes_push WHERE usuario_matricula=$1',[mat]);}
   }else{
     await db.query('INSERT INTO pessoas(nome,role,cargo,regiao,zona_id,login,senha_hash,cpf,email,telefone,admissao,ativo,matricula) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',values);
   }

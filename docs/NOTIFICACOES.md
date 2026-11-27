@@ -35,6 +35,7 @@ Em execução sem servidor permanente, a rota `GET /api/tarefas/notificacoes` pr
 ## API
 
 - `GET /api/notificacoes?status=todas|nao_lidas&pagina=1&limite=15`: lista e contadores do próprio usuário.
+- `GET /api/notificacoes/:id`: própria notificação para abertura por push, com nova autorização.
 - `PATCH /api/notificacoes/:id` com `lida: true|false`: leitura individual.
 - `PATCH /api/notificacoes/lidas` com `ate_id`: marca as notificações já consultadas.
 - `GET /api/tarefas/notificacoes`: rotina autenticada por segredo, para agendador.
@@ -45,4 +46,4 @@ Usuário, perfil e zona são obtidos da sessão. Não há endpoint público que 
 
 O [Carbon — Notification](https://www.carbondesignsystem.com/building-blocks/core/components/notification/guidelines) orienta a distinguir avisos temporários de outras apresentações. A [Atlassian — Badge](https://atlassian.design/components/badge/usage) fundamenta o indicador numérico. O [Zendesk — Automations](https://support.zendesk.com/hc/en-us/articles/4408832701850-About-automations-and-how-they-work) distingue regras por tempo de regras por eventos. O intervalo de um minuto e o marco de 75% são decisões do FieldIQ, não regras atribuídas a esses produtos.
 
-O push e sua ativação em HTTPS são uma etapa separada. Na [documentação WebKit para iOS/iPadOS](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/), a experiência de instalação na tela inicial e a permissão do usuário fazem parte das condições de uso. O visual nativo da notificação depende do sistema operacional; não recebe o CSS da central.
+Web Push implementado com inscrição explícita, vínculo por dispositivo, mensagem genérica, fila transacional e revogação. A mesma rotina de SLA processa o envio; ativação HTTPS e validação física continuam separadas dos testes simulados. Consulte [Push e publicação](PUSH-E-PUBLICACAO.md). Na [documentação WebKit para iOS/iPadOS](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/), instalação na tela inicial e permissão fazem parte das condições de uso. O visual nativo depende do sistema operacional; não recebe o CSS da central.

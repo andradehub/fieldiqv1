@@ -91,10 +91,15 @@ O IP pode mudar ao reconectar a rede; confira o endereço exibido em cada inicia
 | `npm run db:init` | Inicializar/atualizar o esquema e informar a quantidade de chamados. |
 | `npm run db:export` | Exportar dados de domínio para `.fieldiq/exports/fieldiq-dominio.sql`. |
 | `npm run admin:create` | Criar uma conta Administrativo usando variáveis de ambiente. |
+| `npm run push:keys -- --contato=mailto:seu-email` | Criar chaves VAPID privadas locais, sem exibir ou substituir chaves existentes. |
+| `npm run demo:expandir` | Complementar uma base demonstrativa anterior, com servidor encerrado e backup. |
 | `node test/browser-operations.mjs` | Verificar operações e filtros em celular/tablet. |
 | `node test/browser-followups.mjs` | Verificar rascunhos, cargos, imagens, portal e triagem. |
 | `node test/browser-review.mjs` | Verificar visual dos cabeçalhos, prioridades, Meus chamados, perfil detalhado e inclusão pela supervisão. |
 | `node test/browser-team.mjs` | Verificar colaboração entre contas, conflito de edição, assumir e liberar. |
+| `node test/browser-notifications.mjs` | Verificar central, leitura, rascunhos e troca de conta. |
+| `node test/browser-push.mjs` | Verificar inscrição, service worker e logout, com entrega simulada. |
+| `node test/browser-demo.mjs` | Verificar base ampliada, avatares e consulta por zona. |
 
 Scripts que acessam o PGlite local, como `db:init`, `db:export` e `admin:create`, devem ser usados com o servidor encerrado. A exportação da interface pode ser usada enquanto ele está aberto.
 
@@ -102,7 +107,9 @@ Scripts que acessam o PGlite local, como `db:init`, `db:export` e `admin:create`
 
 Sem `DATABASE_URL`, o modo local cria dados fictícios e persiste as alterações em `.fieldiq/data`.
 
-Na primeira inicialização da base demonstrativa são criadas **10 zonas, 11 contas — 10 colaboradores e 1 cliente —, 5 locais, 6 elevadores e 17 chamados**. As datas dessa base inicial são relativas à sua criação. Inicializações seguintes preservam os dados; migrações atualizam o esquema sem recriar os chamados.
+Na primeira inicialização da base demonstrativa são criadas **10 zonas, 51 contas — 50 colaboradores e 1 cliente —, 25 locais, 46 elevadores e 177 chamados**. Há supervisores, técnicos e estagiários por zona, avatares ilustrados, contatos fictícios, históricos e equipes. As datas são relativas à criação da base. Inicializações seguintes preservam os dados; migrações atualizam o esquema sem recriar chamados.
+
+As 40 contas adicionais usam `demonstracao.1` até `demonstracao.40`, com a senha demonstrativa configurada. Bases existentes não recebem novos chamados automaticamente. O comando explícito `demo:expandir` reconhece a ampliação fictícia anterior para não duplicá-la. Consulte [Dados de demonstração](docs/DADOS-DEMONSTRACAO.md).
 
 | Perfil | Usuário local | Senha local | Escopo inicial |
 | --- | --- | --- | --- |
@@ -289,7 +296,7 @@ Estados da solicitação: `aguardando_triagem`, `aceita` e `recusada`. O cliente
 
 Enquanto aguarda triagem, o cliente pode usar **Lembrar a empresa**, com intervalo mínimo de uma hora por solicitação. O sistema registra o lembrete e exibe quantidade e último horário na fila interna. Depois da triagem, a ação deixa de estar disponível.
 
-Os lembretes são internos: não há envio de e-mail, WhatsApp, SMS ou push nessa versão.
+Os lembretes do cliente são registrados internamente. A gestão pode recebê-los também por Web Push quando configurado e autorizado no dispositivo; não há envio de e-mail, WhatsApp ou SMS.
 
 ## Identificação de recorrências
 
@@ -309,11 +316,13 @@ A versão atual funciona **sem LLM, chave externa ou envio de textos a um proved
 
 Sino no topo e nos detalhes do chamado, painel lateral no computador e tela completa no celular. Contador de não lidas, histórico persistente, filtros, paginação e leitura individual/coletiva. Avisos breves pessoais/críticos são silenciosos. A central preserva o atendimento aberto e isola destinatário, perfil e zona.
 
-Atribuição, equipe, liberação, solicitações e lembretes dos clientes geram notificações na transação da ação. O servidor local avalia SLA a cada minuto: confirmação ao assumir, aviso em 75% e no vencimento, sem repetir por destinatário/prazo/etapa. Agendamento externo exige configuração própria pela rota protegida; push permanece em implementação nesta etapa. Consulte [Notificações](docs/NOTIFICACOES.md).
+Atribuição, equipe, liberação, solicitações e lembretes dos clientes geram notificações na transação da ação. Assumir gera confirmação imediata; o servidor local avalia SLA a cada minuto, com avisos em 75% e no vencimento, sem repetir por destinatário/prazo/etapa. Agendamento externo exige configuração própria pela rota protegida. Consulte [Notificações](docs/NOTIFICACOES.md).
+
+Web Push implementado em **Meu perfil → Notificações no celular**, com ativação explícita, mensagem genérica e silenciosa, fila persistente, retentativas e revogação. Não exibe cliente, endereço ou descrição na tela bloqueada. Precisa de HTTPS, chaves VAPID do servidor, rotina de envio e permissão do navegador; no iPhone/iPad, instalação na tela inicial em versão compatível. HTTP por IP da rede local oferece a central, mas não ativa push móvel. [Configuração e limites do push](docs/PUSH-E-PUBLICACAO.md).
 
 ## Dados da demonstração e escopo atual
 
-A versão final do TCC não oferece importação de chamados nem migração de bases externas. O menu, as rotas, o leitor CSV/Excel/JSON, o conversor de arquivos e os exemplos de upload foram retirados. Os cadastros são feitos nas telas da aplicação; o histórico cresce com os atendimentos registrados. A demonstração inicial usa os dados fictícios de server/seed.mjs, criados somente quando a base está vazia.
+A versão final do TCC não oferece importação de chamados nem migração de bases externas. O menu, as rotas, o leitor CSV/Excel/JSON, o conversor e os exemplos de upload foram retirados. Os cadastros são feitos nas telas; o histórico cresce com os atendimentos. A demonstração usa [seed.mjs](server/seed.mjs) e [demo-extra.mjs](server/demo-extra.mjs), na primeira inicialização de uma base demonstrativa vazia.
 
 Esta alteração não apaga nem recria a base existente. Pessoas, fotos, zonas, locais, elevadores, chamados, participações e históricos já gravados continuam disponíveis conforme as permissões normais. A exportação de domínio na área Banco de dados é uma consulta de saída e continua disponível; não oferece restauração ou importação pela aplicação.
 
@@ -358,6 +367,8 @@ Encerre o servidor, execute `npm run db:init` e inicie novamente. O serviço sep
 | Estruturas históricas sem função ativa | `importacoes`, `migracoes_legado`, `referencias_legado`: mantidas apenas por compatibilidade, fora do catálogo operacional. |
 | Identidade/auditoria | `sessoes`, `auditoria_usuarios`. |
 | Cliente | `cliente_locais`, `solicitacoes_clientes`, `lembretes_solicitacoes`. |
+| Notificações | `notificacoes`, `inscricoes_push`, `entregas_push`; histórico individual e fila privada de entrega. |
+| Demonstração | `inicializacoes_demo`, controle para não repetir a ampliação fictícia. |
 | Controle de esquema | `schema_migrations`, criada pelo inicializador. |
 
 As views `vw_chamados_metricas_base` e `vw_chamados_metricas` agregam identificação, SLA, tempos, anexos e participações. Chaves estrangeiras e restrições garantem vínculos e coerência de dados, incluindo solução/data para encerramento.
@@ -373,6 +384,8 @@ As views `vw_chamados_metricas_base` e `vw_chamados_metricas` agregam identifica
 | [005-responsabilidade.sql](database/005-responsabilidade.sql) | Corrigir chamados Em andamento sem responsável, preservando histórico e prazos. |
 | [006-prioridades-abc.sql](database/006-prioridades-abc.sql) | Converter prioridades para A/B/C sem reiniciar SLA, períodos ou datas. |
 | [007-notificacoes.sql](database/007-notificacoes.sql) | Histórico individual, leitura e deduplicação de notificações. |
+| [008-push.sql](database/008-push.sql) | Inscrições por usuário/dispositivo e fila de entrega Web Push. |
+| [009-demonstracao.sql](database/009-demonstracao.sql) | Inicialização idempotente da base fictícia ampliada. |
 
 O inicializador aplica cada migração pendente uma vez, em transação. Alterações posteriores de esquema devem receber arquivo novo e entrada na lista do inicializador.
 
@@ -404,6 +417,9 @@ Copie [`.env.example`](.env.example) para `.env` quando precisar personalizar o 
 | `ADMIN_LOGIN`, `ADMIN_NAME` | Login e nome para `admin:create`. |
 | `ADMIN_PASSWORD` | Senha de 12 a 200 caracteres para `admin:create`. |
 | `ADMIN_REGISTRATION` | Matrícula opcional do Administrativo; padrão `ADM-001`. |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Par de chaves Web Push do servidor; apenas a pública chega ao navegador. |
+| `VAPID_SUBJECT` | Contato responsável pelo serviço em formato `mailto:` ou URL HTTPS. |
+| `CRON_SECRET` | Segredo aleatório de pelo menos 32 caracteres para a rotina externa de SLA/envio. |
 
 Para criar o primeiro Administrativo em uma base sem demonstração, configure `DATABASE_URL`, `DEMO_MODE=0` e as variáveis `ADMIN_*` no ambiente privado, e execute:
 
@@ -452,7 +468,7 @@ Bibliotecas principais: Express, PGlite, `pg`, Chart.js, Lucide e Inter local. V
 fieldiqv1/
 ├── server/                     API, autenticação, banco e regras de domínio
 ├── api/index.mjs                Entrada para execução serverless
-├── database/                   Migrações SQL 001 a 005
+├── database/                   Migrações SQL 001 a 009
 ├── fieldiqarchives/public/
 │   ├── index.html              Área interna
 │   ├── cliente.html            Portal do cliente
@@ -461,7 +477,7 @@ fieldiqv1/
 │   ├── assets/js/views/        Telas internas
 │   ├── assets/js/client-app.js Portal
 │   ├── assets/css/             Estilos compartilhados e por área
-├── scripts/                    Build, banco, Administrativo, conversão e demonstração
+├── scripts/                    Build, banco, Administrativo, chaves push e demonstração
 ├── test/                       Testes de regras, API e navegadores
 ├── docs/                       Pesquisas e detalhamento funcional
 ├── compose.yaml                PostgreSQL separado opcional
@@ -521,9 +537,15 @@ A rota antiga `POST /equipe` não deve ser usada para transferências. Ela bloqu
 | `POST /chamados/:id/sugestao` | Recuperar evidências e gerar análise de recorrência. |
 | `POST /sugestoes/:id/avaliacao` | Registrar `util: true` ou `false`. |
 | `GET /notificacoes` | Histórico e contador do próprio usuário; status, pagina e limite. |
+| `GET /notificacoes/:id` | Consultar a própria notificação ao abrir um aviso push. |
 | `PATCH /notificacoes/:id` | Alternar leitura individual. |
 | `PATCH /notificacoes/lidas` | Marcar como lidas até o último ID consultado. |
 | `GET /tarefas/notificacoes` | Agendador com CRON_SECRET; não aceita sessão comum. |
+| `GET /push/config` | Disponibilidade, chave pública e contagem de dispositivos da própria conta. |
+| `POST /push/estado` | Conferir vínculo da própria inscrição. |
+| `POST /push/inscricoes` | Vincular inscrição válida à própria conta. |
+| `DELETE /push/inscricoes` | Revogar a própria inscrição. |
+| `POST /push/teste` | Enfileirar teste individual; intervalo mínimo de um minuto. |
 | `GET /banco` | Catálogo e informações do banco. |
 | `GET /banco/:table` | Consultar tabela permitida no escopo. |
 | `GET /banco/export` | Exportar SQL de domínio. |
@@ -552,7 +574,7 @@ npm test
 npm run build
 ```
 
-A revisão atual inclui **43 arquivos JavaScript e 38 testes automatizados**, além do build. Os testes cobrem autenticação, autorização por zona/perfil, cargos, clientes, equipes, desatribuição, anexos, SLA, métricas, retirada das rotas de importação, preservação dos dados, exportação e persistência/atualização de banco.
+A revisão atual inclui **53 arquivos JavaScript e 47 testes automatizados**, além do build. Cobrem autenticação, autorização, operação, métricas, persistência, retirada da importação, notificações, push e demonstração ampliada. O transporte push é cifrado pela biblioteca real e inspecionado com rede simulada; não comprova entrega física em celular.
 
 ### Interface
 
@@ -567,11 +589,15 @@ npm run test:browser
 node test/browser-operations.mjs
 node test/browser-followups.mjs
 node test/browser-team.mjs
+node test/browser-review.mjs
+node test/browser-notifications.mjs
+node test/browser-push.mjs
+node test/browser-demo.mjs
 ```
 
 Cobertura registrada: dez áreas internas e perfil detalhado em larguras de 320, 375, 390, 430, 768, 834, 1024 e 1440 px; WebKit em dimensões de iPhone; fluxos de cadastro, rascunho, cargos, visualização/zoom, cliente/triagem, colaboração entre contas e assumir/liberar.
 
-Na verificação da versão sem importação foram concluídas **14 verificações axe gerais e 18 dos fluxos de cadastro, imagens e portal**, sem violações detectadas nos cenários avaliados. Isso não substitui uso em aparelho físico nem certificação integral de acessibilidade. As entregas anteriores e seus resultados históricos permanecem registrados no CHANGELOG.
+Nesta revisão passaram 14 verificações axe gerais, 18 de cadastro/imagens/portal, 16 operacionais, 29 de tabelas/equipes, 5 da central, 2 de push e 2 da demonstração, sem violações nos cenários avaliados. Isso não substitui uso em aparelho físico nem certificação integral de acessibilidade. Resultados históricos permanecem no CHANGELOG.
 
 
 Capturas e relatórios são gerados em `test-results/redesign`, `test-results/operations` e `test-results/followups`, fora do Git. A interface móvel usa cartões, cinco chamados por página, navegação inferior, filtros completos em grade e abas reorganizadas. No computador, são dez chamados por página.
@@ -613,7 +639,7 @@ A API serverless usa [api/index.mjs](api/index.mjs). Não coloque credenciais em
 
 - Dados demonstrativos são fictícios; a qualidade da análise precisa ser avaliada com histórico real autorizado.
 - A aplicação registra e acompanha manutenção; não controla o elevador nem recebe telemetria/sensores.
-- Não existe integração direta com ERP, fornecedores legados, e-mail, WhatsApp, SMS ou push.
+- Não existe integração direta com ERP, fornecedores legados, e-mail, WhatsApp ou SMS.
 - Não há funcionamento offline completo com sincronização posterior, cadastro público ou recuperação de senha por e-mail.
 - A identificação de recorrências não interpreta anexos automaticamente e não confirma diagnóstico ou eficácia de reparo.
 - O SLA é de resolução em horas corridas, sem calendários contratuais comerciais.
@@ -621,7 +647,7 @@ A API serverless usa [api/index.mjs](api/index.mjs). Não coloque credenciais em
 - A exportação SQL de domínio não substitui backup completo.
 - PGlite local atende ao desenvolvimento/demonstração em um processo; múltiplas instâncias exigem banco compartilhado apropriado.
 - Testes de nuvem e de dispositivos físicos permanecem separados das verificações locais registradas.
-- Push e publicação externa permanecem em implementação; central, eventos e alertas locais já possuem implementação e testes. Consulte a [lista completa de pendências](docs/REVISAO-DE-REQUISITOS.md#o-que-continua-pendente).
+- Web Push tem implementação e testes simulados; ativação real depende de HTTPS, configuração VAPID, agendamento e permissão do aparelho. Publicação externa e teste físico permanecem pendentes. Consulte a [lista completa de pendências](docs/REVISAO-DE-REQUISITOS.md#o-que-continua-pendente).
 
 ## Histórico e manutenção no GitHub
 

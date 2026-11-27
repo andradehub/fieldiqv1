@@ -1,6 +1,8 @@
+import {loadLocalPushKeys} from './push-local.mjs';
 import {startNotificationJobs} from './notification-jobs.mjs';
 import { createDatabase } from './db.mjs';
 import { createApp } from './app.mjs';
+await loadLocalPushKeys();
 const db = await createDatabase();
 const app = createApp(db);
 const stopNotificationJobs=startNotificationJobs(db);

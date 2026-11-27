@@ -11,7 +11,7 @@ async function request(route,{cookie=supervisor,method='GET',body,headers={}}={}
 async function login(login){const r=await request('/auth/login',{method:'POST',body:{login,senha:'tk2026'}});assert.equal(r.status,200);return r.headers.get('set-cookie').split(';')[0];}
 const current=async id=>(await db.query('SELECT * FROM vw_chamados_metricas WHERE id=$1',[id])).rows[0];
 before(async()=>{
-  db=await createDatabase({dataDir:'memory://',demo:true});server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');base='http://127.0.0.1:'+server.address().port;
+  db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false});server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');base='http://127.0.0.1:'+server.address().port;
   admin=await login('administrativo');supervisor=await login('supervisor.capital');tech=await login('tecnico.capital');other=await login('supervisor.interior');
 });
 after(async()=>{await new Promise(r=>server.close(r));await db.close();});

@@ -1,4 +1,5 @@
 import {insist,integer,oneOf} from './permissions.mjs';
+import {enqueuePush} from './push-store.mjs';
 
 // The recipient's role and zone are checked again on every read. A transfer or
 // change of role must not expose notifications from the previous permission set.
@@ -11,7 +12,7 @@ export async function notify(db,{usuarios,ator=null,zona=null,chamado=null,solic
     WHERE p.matricula=ANY($1::text[]) AND p.ativo AND p.role IN ('tecnico','supervisor','administrativo')
       AND ($2::text IS NULL OR p.role='administrativo' OR p.zona_id=$2)
     ON CONFLICT(usuario_matricula,chave) DO NOTHING RETURNING id`,[[...new Set(usuarios)],zona,chamado,solicitacao,ator,tipo,titulo,mensagem,gravidade,chave]);
-  return rows.map(row=>row.id);
+  const ids=rows.map(row=>row.id);await enqueuePush(db,ids);return ids;
 }
 export async function managers(db,zona,except=null){
   return (await db.query("SELECT matricula FROM pessoas WHERE ativo AND (role='administrativo' OR (role='supervisor' AND zona_id=$1)) AND ($2::text IS NULL OR matricula<>$2)",[zona,except])).rows.map(p=>p.matricula);
@@ -28,6 +29,10 @@ export async function notifyTeam(db,ticket,actor,matricula,incluido,chave){
   await notify(db,{...context,usuarios:await managers(db,ticket.zona_id,actor.matricula),tipo:'equipe_alterada',titulo:'Equipe atualizada no chamado #'+ticket.id,mensagem:incluido?'Um técnico foi incluído na equipe. A inclusão e sua autoria estão no histórico.':'Um participante saiu ou foi removido da equipe. Consulte os registros do chamado.'});
 }
 export function registerNotificationRoutes(api,db){
+  api.get('/notificacoes/:id',async(req,res)=>{
+    const {rows}=await db.query(`SELECT n.id,n.tipo,n.titulo,n.mensagem,n.gravidade,n.chamado_id,n.solicitacao_id,n.criado_em,n.lido_em FROM notificacoes n WHERE ${scope} AND n.id=$4`,[...params(req.user),integer(req.params.id,'Notificação')]);
+    insist(rows.length,404,'Notificação indisponível para sua conta.');res.json(rows[0]);
+  });
   api.get('/notificacoes',async(req,res)=>{
     const status=oneOf(req.query.status??'todas',['todas','nao_lidas'],'Filtro'),page=integer(req.query.pagina??1,'Página',1,100000),limit=integer(req.query.limite??15,'Limite',1,50);
     const p=params(req.user),filter=scope+(status==='nao_lidas'?' AND n.lido_em IS NULL':'');
