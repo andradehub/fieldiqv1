@@ -8,6 +8,8 @@ import {registerUserRoutes} from './users.mjs';
 import {registerAttachmentRoutes} from './attachments.mjs';
 import {registerAttendanceRoutes,closeIntervals,beginInterval} from './attendance.mjs';
 import {registerPortalRoutes,internalRequests} from './portal.mjs';
+import {PRIORITIES} from '../fieldiqarchives/public/assets/js/core/priorities.js';
+import {registerTechnicianRoutes} from './technicians.mjs';
 
 export {ApiError};
 async function equipment(db, id, user) {
@@ -24,7 +26,7 @@ async function technician(db, matricula, zone) {
   return matricula;
 }
 const works = ['obra_nova','mod_integral','mod_parcial'];
-const priorities = ['baixa','media','alta','critica'];
+const priorities = Object.keys(PRIORITIES);
 const statuses = ['aberto','em_andamento','resolvido','cancelado'];
 
 export async function insertTicket(db, body, user, {openedAt} = {}) {
@@ -39,7 +41,7 @@ export async function insertTicket(db, body, user, {openedAt} = {}) {
   insist(Number.isFinite(open.getTime()) && open.getTime() <= Date.now() + 60000, 400, 'Data de abertura inválida ou futura.');
   insist(status !== 'resolvido' || (solution && close && Number.isFinite(close.getTime()) && close >= open && close.getTime() <= Date.now() + 60000), 400, 'Chamado resolvido exige solução e data de resolução válidas.');
   const type = oneOf(body.tipo_obra ?? 'mod_parcial',works,'Classificação');
-  const priority = oneOf(body.prioridade ?? 'media',priorities,'Prioridade');
+  const priority = oneOf(body.prioridade ?? 'B',priorities,'Prioridade');
   const sla = integer(body.sla_horas ?? 24,'SLA',1,8760);
   const row = await db.query(
     'INSERT INTO chamados (elevador_id,titulo,descricao,tipo_obra,prioridade,status,sla_horas,tecnico_matricula,aberto_em,resolvido_em,solucao,criado_por,chave_importacao) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id',
@@ -53,7 +55,7 @@ export async function insertTicket(db, body, user, {openedAt} = {}) {
 // Only domain data is exposed. Password hashes and sessions never enter this catalogue.
 const tableQueries = {
   zonas: 'SELECT * FROM zonas WHERE ($1::boolean OR id=$2)',
-  pessoas: 'SELECT matricula,nome,role,cargo,regiao,zona_id,login,ativo FROM pessoas WHERE ($1::boolean OR zona_id=$2)',
+  pessoas: 'SELECT matricula,nome,role,cargo,regiao,zona_id,ativo FROM pessoas WHERE ($1::boolean OR zona_id=$2)',
   locais: 'SELECT l.* FROM locais l WHERE ($1::boolean OR l.zona_id=$2)',
   elevadores: 'SELECT e.* FROM elevadores e JOIN locais l ON l.id=e.local_id WHERE ($1::boolean OR l.zona_id=$2)',
   chamados: 'SELECT c.* FROM chamados c JOIN vw_chamados_metricas v ON v.id=c.id WHERE ($1::boolean OR v.zona_id=$2)',
@@ -76,7 +78,7 @@ export async function exportDomainSQL(db, user={role:'administrativo'}) {
   let sql = '-- FieldIQ: exportacao de dados de dominio.\n-- Nao inclui senhas, CPF, contatos, sessoes ou arquivos anexados; nao substitui backup completo.\nBEGIN;\n' + schemaSQL + '\n';
   for (const [table,query] of Object.entries(tableQueries)) {
     if(table==='anexos_chamados')continue;
-    const result = table==='pessoas' ? await db.query("SELECT matricula,nome,role,cargo,CASE WHEN ($1::boolean OR zona_id=$2) THEN regiao ELSE NULL END AS regiao,CASE WHEN ($1::boolean OR zona_id=$2) THEN zona_id ELSE NULL END AS zona_id,CASE WHEN ($1::boolean OR zona_id=$2) THEN login ELSE NULL END AS login,ativo FROM pessoas WHERE ($1::boolean OR zona_id=$2) OR matricula IN (SELECT criado_por FROM vw_chamados_metricas WHERE zona_id=$2 UNION SELECT tecnico_matricula FROM vw_chamados_metricas WHERE zona_id=$2 UNION SELECT h.usuario_matricula FROM historico_chamados h JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE c.zona_id=$2 UNION SELECT a.usuario_matricula FROM avaliacoes_ia a JOIN sugestoes_ia s ON s.id=a.sugestao_id JOIN vw_chamados_metricas c ON c.id=s.chamado_id WHERE c.zona_id=$2 UNION SELECT a.tecnico_matricula FROM atendimentos a JOIN vw_chamados_metricas c ON c.id=a.chamado_id WHERE c.zona_id=$2)",params) : await db.query(query,params);
+    const result = table==='pessoas' ? await db.query("SELECT matricula,nome,role,cargo,CASE WHEN ($1::boolean OR zona_id=$2) THEN regiao ELSE NULL END AS regiao,CASE WHEN ($1::boolean OR zona_id=$2) THEN zona_id ELSE NULL END AS zona_id,NULL::text AS login,ativo FROM pessoas WHERE ($1::boolean OR zona_id=$2) OR matricula IN (SELECT criado_por FROM vw_chamados_metricas WHERE zona_id=$2 UNION SELECT tecnico_matricula FROM vw_chamados_metricas WHERE zona_id=$2 UNION SELECT h.usuario_matricula FROM historico_chamados h JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE c.zona_id=$2 UNION SELECT a.usuario_matricula FROM avaliacoes_ia a JOIN sugestoes_ia s ON s.id=a.sugestao_id JOIN vw_chamados_metricas c ON c.id=s.chamado_id WHERE c.zona_id=$2 UNION SELECT a.tecnico_matricula FROM atendimentos a JOIN vw_chamados_metricas c ON c.id=a.chamado_id WHERE c.zona_id=$2)",params) : await db.query(query,params);
     for (const row of result.rows) {
       const keys = Object.keys(row);
       sql += 'INSERT INTO ' + table + ' (' + keys.join(',') + ') VALUES (' + keys.map(k => sqlValue(row[k])).join(',') + ') ON CONFLICT DO NOTHING;\n';
@@ -94,6 +96,7 @@ export function createApp(db) {
     res.set('X-Content-Type-Options','nosniff');
     res.set('Referrer-Policy','same-origin');
     res.set('X-Frame-Options','DENY');
+    res.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
     if (req.path.startsWith('/api')) res.set('Cache-Control','no-store');
     if (['POST','PATCH','DELETE','PUT'].includes(req.method)) {
       const origin = req.headers.origin;
@@ -264,9 +267,11 @@ export function createApp(db) {
     insist(query,404,'Tabela não disponível.');
     const {rows} = await db.query('SELECT * FROM (' + query + ') scoped ORDER BY 1 LIMIT 100',scopeParams(req.user));
     const columns = await db.query('SELECT column_name,data_type,is_nullable FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2 ORDER BY ordinal_position',['fieldiq',req.params.table]);
-    res.json({tabela:req.params.table,linhas:rows,colunas:columns.rows.filter(c => c.column_name !== 'senha_hash' && c.column_name !== 'foto')});
+    const visible=rows.length?new Set(Object.keys(rows[0])):null;
+    res.json({tabela:req.params.table,linhas:rows,colunas:columns.rows.filter(c => !['senha_hash','foto','cpf','login'].includes(c.column_name)&&(!visible||visible.has(c.column_name)))});
   });
   registerUserRoutes(api,db);
+  registerTechnicianRoutes(api,db);
   registerAttachmentRoutes(api,db);
   registerAttendanceRoutes(api,db);
   registerPortalRoutes(api,db,insertTicket);

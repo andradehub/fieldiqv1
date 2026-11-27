@@ -1,6 +1,7 @@
 import {esc,initials,remaining,fmtDate,dueAt} from '../core/format.js';
+import {PRIORITIES,priorityCode} from '../core/priorities.js';
 export const STATUS={aberto:'Aberto',em_andamento:'Em andamento',resolvido:'Resolvido',cancelado:'Cancelado'};
-export const PRIORITIES={baixa:'Baixa',media:'Média',alta:'Alta',critica:'Crítica'};
+export {PRIORITIES} from '../core/priorities.js';
 export const WORKS={obra_nova:'Obra nova',mod_integral:'Modificação integral',mod_parcial:'Modificação parcial'};
 export function icon(name,size=20){
   const node=window.lucide?.icons[name]??window.lucide?.icons.Circle;
@@ -17,7 +18,7 @@ export function badge(label,tone='neutral',name=''){
   return '<span class="badge badge--'+tone+'">'+(name?icon(name,14):'')+esc(label)+'</span>';
 }
 export const statusBadge=status=>badge(STATUS[status]??status,({aberto:'blue',em_andamento:'amber',resolvido:'green',cancelado:'neutral'})[status],({aberto:'CircleDashed',em_andamento:'Clock3',resolvido:'CircleCheck',cancelado:'CircleOff'})[status]);
-export const priorityBadge=value=>badge(PRIORITIES[value]??value,({baixa:'neutral',media:'neutral',alta:'amber',critica:'red'})[value],value==='critica'?'TriangleAlert':'');
+export function priorityBadge(value){const code=priorityCode(value);return badge(PRIORITIES[code]??'Não informada',({A:'red',B:'amber',C:'neutral'})[code],code==='A'?'TriangleAlert':'');}
 export const workBadge=value=>badge(WORKS[value]??value,'purple');
 export function slaBadge(ticket){
   if(ticket.status==='cancelado')return badge('Cancelado','neutral');

@@ -10,7 +10,7 @@ export function validCPF(value){
 }
 export const userColumns='matricula,nome,role,cargo,regiao,zona_id,login,ativo,email,telefone,admissao,criado_em';
 export async function saveUser(db,actor,body,existing=null){
-  supervisor(actor);
+  insist(isAdmin(actor),403,'Somente o Administrativo pode cadastrar, editar ou desativar usuários.');
   const allowed=['matricula','nome','role','cargo','zona_id','login','senha','cpf','email','telefone','admissao','ativo','locais_ids'];
   insist(Object.keys(body).every(k=>allowed.includes(k)),400,'Campo de usuário não reconhecido.');
   if(existing)insist(isAdmin(actor)||(existing.role==='tecnico'&&existing.zona_id===actor.zona_id),403,'Você administra apenas técnicos da própria zona.');
@@ -85,15 +85,20 @@ export async function saveUser(db,actor,body,existing=null){
 export function registerUserRoutes(api,db){
   api.get('/usuarios',async(req,res)=>{
     supervisor(req.user);
+    if(!isAdmin(req.user)){
+      const {rows}=await db.query("SELECT matricula,nome,role,cargo,zona_id,ativo,email,telefone FROM pessoas WHERE zona_id=$1 AND role='tecnico' ORDER BY ativo DESC,nome",[req.user.zona_id]);
+      res.json({usuarios:rows});return;
+    }
     const {rows}=await db.query('SELECT '+userColumns+",CASE WHEN cpf IS NULL THEN NULL ELSE '***.***.***-'||right(cpf,2) END AS cpf_mascarado FROM pessoas WHERE ($1::boolean OR (zona_id=$2 AND role='tecnico')) ORDER BY nome",scopeParams(req.user));
     const links=isAdmin(req.user)?(await db.query('SELECT cliente_matricula,local_id FROM cliente_locais')).rows:[];
     res.json({usuarios:rows.map(p=>({...p,locais_ids:links.filter(l=>l.cliente_matricula===p.matricula).map(l=>l.local_id)}))});
   });
   api.post('/usuarios',async(req,res)=>{
+    insist(isAdmin(req.user),403,'Somente o Administrativo pode cadastrar usuários.');
     const mat=await db.transaction(tx=>saveUser(tx,req.user,req.body));res.status(201).json({matricula:mat});
   });
   api.patch('/usuarios/:matricula',async(req,res)=>{
-    supervisor(req.user);
+    insist(isAdmin(req.user),403,'Somente o Administrativo pode editar ou desativar usuários.');
     const mat=await db.transaction(async tx=>{
       // Serialize administrative edits, including the last-admin invariant.
       await tx.query("SELECT matricula FROM pessoas WHERE role='administrativo' ORDER BY matricula FOR UPDATE");

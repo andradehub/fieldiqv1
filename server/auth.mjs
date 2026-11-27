@@ -15,8 +15,8 @@ export async function verifyPassword(password, stored) {
 export const hashToken = token => createHash('sha256').update(token).digest('hex');
 export const newToken = () => randomBytes(32).toString('hex');
 export function publicPerson(person) {
-  const { senha_hash, cpf, ...safe } = person;
-  return safe;
+  const fields=['matricula','nome','role','cargo','regiao','zona_id','foto','ativo'];
+  return Object.fromEntries(fields.map(field=>[field,person[field]??null]));
 }
 export function readToken(req) {
   const raw = (req.headers.cookie ?? '').split(';').map(x => x.trim()).find(x => x.startsWith('fieldiq_session='));

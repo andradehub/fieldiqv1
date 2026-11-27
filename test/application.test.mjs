@@ -44,7 +44,7 @@ test('técnico não administra banco, cria chamados ou altera outros responsáve
   assert.equal((await request('/equipe',{cookie:technician,method:'POST',body:{matricula:'TK-CAP-002'}})).status,403);
 });
 test('técnico encerra o próprio chamado com solução; SLA e histórico são calculados',async()=>{
-  const created=await request('/chamados',{cookie:supervisor,method:'POST',body:{titulo:'Teste de SLA',elevador_id:1,tipo_obra:'mod_parcial',prioridade:'alta',sla_horas:1,tecnico:'TK-CAP-001'}});
+  const created=await request('/chamados',{cookie:supervisor,method:'POST',body:{titulo:'Teste de SLA',elevador_id:1,tipo_obra:'mod_parcial',prioridade:'A',sla_horas:1,tecnico:'TK-CAP-001'}});
   assert.equal(created.status,201);
   const id=created.data.id;
   await db.query("UPDATE chamados SET aberto_em=now()-interval '2 days' WHERE id=$1",[id]);

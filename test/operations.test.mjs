@@ -34,21 +34,25 @@ test('zona isola consultas, exportação, IA, banco e acessos diretos; Administr
   assert.ok((await call('/banco/elevadores',{cookie:supervisor})).data.linhas.every(e=>e.codigo.startsWith('BAR-')));
 });
 const person={matricula:'NOVO-001',nome:'Pessoa de teste fictícia',role:'tecnico',cargo:'Técnico de manutenção',cpf:'529.982.247-25',email:'pessoa@example.com',telefone:'(21) 00000-0000',zona_id:'cap-04',login:'pessoa.teste',senha:'senha-ficticia-123',ativo:true,admissao:'2026-01-02'};
-test('cadastro persiste dados e senha protegida; supervisor cria só técnico na própria zona',async()=>{
+test('apenas Administrativo cadastra e edita; supervisor consulta contatos sem CPF ou login',async()=>{
   assert.ok(validCPF(person.cpf));assert.ok(!validCPF('11111111111'));
   assert.equal((await call('/usuarios',{cookie:supervisor,method:'POST',body:{...person,zona_id:'int-01'}})).status,403);
   assert.equal((await call('/usuarios',{cookie:supervisor,method:'POST',body:{...person,role:'supervisor'}})).status,403);
-  assert.equal((await call('/usuarios',{cookie:supervisor,method:'POST',body:{...person,cpf:'00000000000'}})).status,400);
-  assert.equal((await call('/usuarios',{cookie:supervisor,method:'POST',body:person})).status,201);
+  assert.equal((await call('/usuarios',{cookie:supervisor,method:'POST',body:{...person,cpf:'00000000000'}})).status,403);
+  assert.equal((await call('/usuarios',{cookie:supervisor,method:'POST',body:person})).status,403);
+  assert.equal((await call('/usuarios',{method:'POST',body:{...person,cpf:'00000000000'}})).status,400);
+  assert.equal((await call('/usuarios',{method:'POST',body:person})).status,201);
   const p=(await db.query('SELECT * FROM pessoas WHERE matricula=$1',[person.matricula])).rows[0];
   assert.match(p.senha_hash,/^scrypt:/);assert.notEqual(p.senha_hash,person.senha);assert.equal(p.cpf,'52998224725');
   const users=(await call('/usuarios',{cookie:supervisor})).data.usuarios;
-  assert.ok(users.every(u=>u.role==='tecnico'&&u.zona_id==='cap-04'&&!('cpf' in u)&&!('senha_hash' in u)));
-  assert.equal(users.find(u=>u.matricula===person.matricula).cpf_mascarado,'***.***.***-25');
+  assert.ok(users.every(u=>u.role==='tecnico'&&u.zona_id==='cap-04'&&!('cpf' in u)&&!('cpf_mascarado' in u)&&!('login' in u)&&!('senha_hash' in u)));
+  assert.equal(users.find(u=>u.matricula===person.matricula).email,'pessoa@example.com');
+  assert.equal((await call('/usuarios')).data.usuarios.find(u=>u.matricula===person.matricula).cpf_mascarado,'***.***.***-25');
   const cookie=await login(person.login,person.senha);assert.ok(!('cpf' in (await call('/bootstrap',{cookie})).data.user));
   assert.equal((await call('/usuarios/'+person.matricula,{cookie:supervisor,method:'PATCH',body:{zona_id:'cap-02'}})).status,403);
   assert.equal((await call('/equipe',{cookie:supervisor,method:'POST',body:{matricula:person.matricula}})).status,403);
-  assert.equal((await call('/usuarios/'+person.matricula,{cookie:supervisor,method:'PATCH',body:{email:'atualizado@example.com'}})).status,200);
+  assert.equal((await call('/usuarios/'+person.matricula,{cookie:supervisor,method:'PATCH',body:{email:'atualizado@example.com'}})).status,403);
+  assert.equal((await call('/usuarios/'+person.matricula,{method:'PATCH',body:{email:'atualizado@example.com'}})).status,200);
   assert.equal((await call('/usuarios/'+person.matricula,{cookie:interior,method:'PATCH',body:{nome:'Tentativa'}})).status,403);
   assert.equal((await call('/usuarios',{method:'POST',body:{...person,matricula:'INVALID-ADM',role:'administrativo'}})).status,403);
 });
@@ -105,7 +109,16 @@ test('migração de esquema preserva banco da versão anterior e não reaplica a
   await mkdir(path.join(projectRoot,'test-results'),{recursive:true});const folder=await mkdtemp(path.join(projectRoot,'test-results','upgrade-'));
   const {PGlite}=await import('@electric-sql/pglite');let old=await PGlite.create(folder);
   await old.exec(await readFile(path.join(projectRoot,'database/001-schema.sql'),'utf8'));
-  await old.query("INSERT INTO pessoas(matricula,nome,role,cargo,regiao) VALUES ('OLD-001','Usuário existente','tecnico','Técnico','capital')");await old.close();
-  let upgraded=await createDatabase({dataDir:folder,demo:false});assert.equal((await upgraded.query("SELECT nome FROM pessoas WHERE matricula='OLD-001'")).rows[0].nome,'Usuário existente');await upgraded.close();
-  upgraded=await createDatabase({dataDir:folder,demo:false});try{assert.equal((await upgraded.query('SELECT * FROM schema_migrations')).rows.length,5);}finally{await upgraded.close();}
+  await old.query("INSERT INTO pessoas(matricula,nome,role,cargo,regiao) VALUES ('OLD-001','Usuário existente','tecnico','Técnico','capital')");
+  await old.query("INSERT INTO zonas VALUES ('old','capital','Zona existente','Local existente')");
+  await old.query("INSERT INTO locais(nome,endereco,bairro,zona_id) VALUES ('Local preservado','Endereço fictício','Bairro','old')");
+  await old.query("INSERT INTO elevadores(codigo,local_id,fabricante,modelo,numero_serie,capacidade_kg) VALUES ('OLD-001',1,'Fictício','Modelo','OLD-SERIE',600)");
+  for(const prioridade of ['critica','alta','media','baixa'])await old.query("INSERT INTO chamados(elevador_id,titulo,descricao,tipo_obra,prioridade,status,sla_horas,criado_por,tecnico_matricula) VALUES (1,$1,'Descrição preservada','mod_parcial',$2,'aberto',12,'OLD-001','OLD-001')",['Chamado '+prioridade,prioridade]);
+  const before=(await old.query('SELECT * FROM chamados ORDER BY id')).rows;await old.close();
+  let upgraded=await createDatabase({dataDir:folder,demo:false});assert.equal((await upgraded.query("SELECT nome FROM pessoas WHERE matricula='OLD-001'")).rows[0].nome,'Usuário existente');
+  const migrated=(await upgraded.query('SELECT * FROM chamados ORDER BY id')).rows;
+  assert.deepEqual(migrated.map(c=>c.prioridade),['A','A','B','C']);
+  for(let i=0;i<before.length;i++)for(const key of Object.keys(before[i]).filter(k=>k!=='prioridade'))assert.deepEqual(migrated[i][key],before[i][key],'Migração alterou '+key);
+  await upgraded.close();
+  upgraded=await createDatabase({dataDir:folder,demo:false});try{assert.equal((await upgraded.query('SELECT * FROM schema_migrations')).rows.length,6);}finally{await upgraded.close();}
 });

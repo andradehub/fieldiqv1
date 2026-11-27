@@ -50,10 +50,19 @@
 .tab.is-active .tab__count{background:var(--brand-soft);color:var(--brand)}
 .data-table{width:100%;border-collapse:collapse;font-size:14px;text-align:left}
 .data-table th{padding:13px 14px;background:var(--surface-soft);border-top:1px solid var(--divider);border-bottom:1px solid var(--divider);font-size:12px;color:var(--muted);font-weight:550;white-space:nowrap}
+.data-table th:has(.table-sort){padding-block:4px}
+.table-sort{appearance:none;display:inline-flex;align-items:center;gap:7px;min-height:40px;max-width:100%;margin:0;padding:7px 0;border:0;border-radius:5px;background:transparent;box-shadow:none;color:inherit;font:inherit;font-weight:600;line-height:1.5;text-align:left;white-space:nowrap}
+.table-sort svg{width:14px;height:14px;color:var(--muted);opacity:.65}
+.table-sort:hover,.data-table th[aria-sort="ascending"] .table-sort,.data-table th[aria-sort="descending"] .table-sort{color:var(--brand)}
+.data-table th[aria-sort="ascending"] .table-sort svg,.data-table th[aria-sort="descending"] .table-sort svg{color:var(--brand);opacity:1}
+.table-sort:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+@media(pointer:coarse){.table-sort{min-height:44px}}
 .data-table td{padding:17px 14px;border-bottom:1px solid var(--divider);vertical-align:middle;line-height:1.55}
 .data-table tr:last-child td{border-bottom:0}
 .data-table tbody tr:hover{background:#faf9fd}
 .table-wrap{position:relative;min-width:0;width:100%;overflow:auto;scrollbar-width:thin}
+.compact-sort{display:none}
+@media(max-width:1099px){.compact-sort{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.8fr);gap:12px;padding:16px 20px;border-bottom:1px solid var(--divider);background:var(--surface)}.compact-sort .field__label{font-size:12px;color:var(--muted)}.compact-sort select{font-size:13px}.tickets-panel>.compact-sort{border-inline:1px solid var(--border)}}
 .cell-stack{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-width:0}
 .cell-stack strong{font-size:14px;font-weight:570}
 .cell-title{max-width:280px;font-weight:550;color:var(--ink)}

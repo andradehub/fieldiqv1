@@ -4,7 +4,7 @@ import path from 'node:path';
 import { seedDatabase } from './seed.mjs';
 
 export const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-const migrations = await Promise.all(['001-schema.sql','002-operacao.sql','003-equipes.sql','004-clientes.sql','005-responsabilidade.sql'].map(async name => ({name,sql:await readFile(new URL('../database/'+name,import.meta.url),'utf8')})));
+const migrations = await Promise.all(['001-schema.sql','002-operacao.sql','003-equipes.sql','004-clientes.sql','005-responsabilidade.sql','006-prioridades-abc.sql'].map(async name => ({name,sql:await readFile(new URL('../database/'+name,import.meta.url),'utf8')})));
 export const schemaSQL = migrations.map(m=>m.sql).join('\n');
 
 export async function createDatabase(options = {}) {

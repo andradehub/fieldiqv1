@@ -2,7 +2,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {state} from '../fieldiqarchives/public/assets/js/core/state.js';
 import {dashboardData} from '../fieldiqarchives/public/assets/js/views/dashboard.js';
-import {filteredTickets} from '../fieldiqarchives/public/assets/js/views/tickets.js';
+import {filteredTickets,sortedTickets} from '../fieldiqarchives/public/assets/js/views/tickets.js';
+import {toggleSort} from '../fieldiqarchives/public/assets/js/core/sorting.js';
 import {weekKey,fmtTime,average} from '../fieldiqarchives/public/assets/js/core/format.js';
 
 test('indicadores usam o recorte de abertura e excluem cancelados da resolução',()=>{
@@ -22,8 +23,8 @@ test('indicadores usam o recorte de abertura e excluem cancelados da resolução
 });
 test('busca e filtros combinados preservam a identificação por equipamento',()=>{
   state.chamados=[
-    {id:1,titulo:'Ruído na cabine',descricao:'',elevador_codigo:'BAR-001',local_nome:'Barra',elevador_id:1,status:'aberto',prioridade:'alta',tipo_obra:'mod_parcial',tecnico:'A'},
-    {id:2,titulo:'Ruído na cabine',descricao:'',elevador_codigo:'BOT-001',local_nome:'Botafogo',elevador_id:2,status:'resolvido',prioridade:'alta',tipo_obra:'mod_parcial',tecnico:'B'}
+    {id:1,titulo:'Ruído na cabine',descricao:'',elevador_codigo:'BAR-001',local_nome:'Barra',elevador_id:1,status:'aberto',prioridade:'A',tipo_obra:'mod_parcial',tecnico:'A'},
+    {id:2,titulo:'Ruído na cabine',descricao:'',elevador_codigo:'BOT-001',local_nome:'Botafogo',elevador_id:2,status:'resolvido',prioridade:'A',tipo_obra:'mod_parcial',tecnico:'B'}
   ];
   state.ui.filters={search:'ruido',status:'pending',equipment:'1'};
   assert.deepEqual(filteredTickets().map(c=>c.id),[1]);
@@ -33,4 +34,14 @@ test('busca e filtros combinados preservam a identificação por equipamento',()
 test('agrupamento semanal distingue anos e tempos iguais a zero são preservados',()=>{
   assert.notEqual(weekKey('2025-01-10T12:00:00Z'),weekKey('2026-01-10T12:00:00Z'));
   assert.equal(fmtTime(average([0,0])),'0 min');
+});
+test('prioridade ordena os registros nos dois sentidos para supervisor e técnico, inclusive valores anteriores à migração',()=>{
+  state.chamados=[{id:1,titulo:'Média anterior',prioridade:'media',tecnico:'T'}, {id:2,titulo:'Leve atual',prioridade:'C',tecnico:'T'}, {id:3,titulo:'Alta anterior',prioridade:'alta',tecnico:'T'}, {id:4,titulo:'Crítica atual',prioridade:'A',tecnico:'OUTRO',equipe_matriculas:['T']}];
+  state.ui.filters={};state.ui.route='meuschamados';
+  for(const role of ['supervisor','tecnico']){
+    state.user={role,matricula:'T'};state.ui.sorts={};toggleSort('meuschamados','prioridade');assert.deepEqual(sortedTickets().map(c=>c.id),[3,4,1,2]);
+    toggleSort('meuschamados','prioridade');assert.deepEqual(sortedTickets().map(c=>c.id),[2,1,3,4]);
+    state.ui.filters={priority:'A'};assert.deepEqual(sortedTickets().map(c=>c.id),[3,4]);state.ui.filters={};
+  }
+  state.ui.route='chamados';state.ui.sorts={};state.user=null;
 });

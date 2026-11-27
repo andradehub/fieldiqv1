@@ -27,6 +27,8 @@ Miniaturas usam enquadramento proporcional, sem cortar a imagem para preencher o
 
 ## Atendimento em equipe
 
+Na Visão geral, o supervisor/Administrativo seleciona técnicos ativos da zona. Sem responsável, a primeira inclusão define o principal; com responsável, adiciona participante. Ambas registram autoria e horário, inclusive em atendimento já iniciado. Gestão de usuários é exclusiva do Administrativo: supervisor consulta contatos sem CPF ou login.
+
 O responsável principal continua no chamado. Outros técnicos ativos da mesma zona podem escolher **Participar do atendimento**, inclusive colaboradores com cargo de estagiário de campo. A Visão geral mostra a equipe e seus cargos.
 
 Cada participante inicia ou pausa o próprio período. Vários participantes podem trabalhar simultaneamente; a pausa de um não encerra a atividade dos demais. A soma representa horas de pessoas: duas pessoas durante uma hora totalizam duas horas de trabalho, enquanto a duração do chamado continua sendo uma hora.

@@ -2,17 +2,7 @@ import {state,isAdmin,zoneName,roleName} from '../core/state.js';
 import {esc,fmtDate} from '../core/format.js';
 import {heading,button,icon,badge,options,notice,emptyState} from '../components/ui.js';
 import {jobTitles} from '../core/jobs.js';
-export function renderUsers(){
-  const ui=state.ui.users??{};
-  const q=(ui.search??'').toLowerCase();
-  const people=state.usuarios.filter(p=>(!ui.role||p.role===ui.role)&&(!ui.zone||p.zona_id===ui.zone)&&(!q||[p.nome,p.matricula,p.email,p.login].some(v=>String(v??'').toLowerCase().includes(q))));
-  return heading('PESSOAS E ACESSOS','Gestão de usuários',isAdmin()?'Cadastre colaboradores e organize as equipes de todas as zonas.':'Cadastre e atualize os técnicos da sua zona.',button('Cadastrar usuário',{action:'user-open',name:'UserRoundPlus',tone:'primary'}))+`
-    ${notice(isAdmin()?'Administrativo / RH: gestão de técnicos e supervisores em todas as zonas.':'Seu cadastro de técnicos fica vinculado a '+zoneName(state.user.zona_id)+'. Transferências são realizadas pelo Administrativo.','ShieldCheck','purple')}
-    <section class="panel users-panel"><div class="toolbar users-toolbar"><label class="search-input"><span class="sr-only">Buscar usuário</span>${icon('Search',18)}<input id="user-search" class="filter-input" data-input="user-search" placeholder="Nome, matrícula ou e-mail" value="${esc(ui.search??'')}"></label>
-    <span class="select-wrap"><select aria-label="Filtrar perfil" data-change="user-role">${options({'':'Todos os perfis',tecnico:'Técnico',...(isAdmin()?{supervisor:'Supervisor',administrativo:'Administrativo',cliente:'Cliente'}:{})},ui.role??'')}</select>${icon('ChevronDown',16)}</span>
-    ${isAdmin()?`<span class="select-wrap"><select aria-label="Filtrar zona" data-change="user-zone">${options({'':'Todas as zonas',...Object.fromEntries(state.zonas.map(z=>[z.id,z.nome+' · '+z.local]))},ui.zone??'')}</select>${icon('ChevronDown',16)}</span>`:''}</div>
-    ${ui.loading?'<div class="loading-state">Carregando usuários…</div>':ui.error?notice(ui.error,'TriangleAlert','warning'):people.length?`<div class="table-wrap"><table class="data-table responsive-table"><thead><tr><th>Colaborador</th><th>Perfil e zona</th><th>Contato</th><th>CPF</th><th>Situação</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>${people.map(p=>`<tr><td class="card-title"><div class="cell-stack"><strong>${esc(p.nome)}</strong><small>${esc(p.matricula)} · ${esc(p.login??'Sem acesso')}</small></div></td><td data-label="Perfil e zona"><div class="cell-stack"><strong>${esc(roleName(p.role))}</strong><small>${esc(p.role==='administrativo'?'Todas as zonas':p.role==='cliente'?(p.locais_ids?.length??0)+' local(is) vinculado(s)':zoneName(p.zona_id))}</small></div></td><td data-label="Contato"><div class="cell-stack"><span>${esc(p.email??'E-mail não informado')}</span><small>${esc(p.telefone??'Telefone não informado')}</small></div></td><td data-label="CPF">${esc(p.cpf_mascarado??'Não informado')}</td><td data-label="Situação">${badge(p.ativo?'Ativo':'Inativo',p.ativo?'green':'neutral')}</td><td class="card-action">${button('Editar',{action:'user-open',attrs:'data-registration="'+esc(p.matricula)+'"',tone:'quiet',name:'SquarePen'})}</td></tr>`).join('')}</tbody></table></div>`:emptyState('Nenhum usuário encontrado','Ajuste os filtros ou cadastre um colaborador.',{name:'UsersRound'})}</section>`;
-}
+export {renderUsers} from './user-list.js';
 export function renderUserDialog(p=null,draft=null){
   const selectedRole=draft?.role??p?.role??'tecnico';
   const selectedJob=draft?.cargo??p?.cargo??Object.keys(jobTitles(selectedRole))[0];

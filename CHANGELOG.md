@@ -2,6 +2,16 @@
 
 Este histórico registra o problema que motivou cada entrega e seu efeito na aplicação. Os commits publicados mantêm seus identificadores; as explicações abaixo complementam suas mensagens.
 
+## 2026-11-26 — revisão visual, inclusão pela supervisão e conferência dos pedidos
+
+**Motivo:** cabeçalhos ordenáveis usavam botões sem estilo; prioridades antigas eram mostradas como códigos em minúsculas e faziam a seta mudar sem reorganizar chamados. Supervisores não tinham o seletor de inclusão de técnicos. Outros pedidos recentes estavam apenas parcialmente implementados e sem uma relação honesta das pendências.
+
+**Alterações:** estilos e ícones compartilhados para ordenação, ordenação antes da paginação, controles para celular/tablet, leitura compatível com prioridades antigas e migração 006 para A/B/C. Na Visão geral, a gestão define o primeiro responsável mesmo sem atribuição anterior e inclui participantes em Aberto/Em andamento, com autoria, nome e horário no histórico, sem reiniciar SLA. Concluídos Meus chamados, perfil detalhado e consulta de contatos pelo supervisor; cadastro/alteração de usuários é exclusivo do Administrativo, sem CPF/login nas respostas ao supervisor. CPF e credenciais também ficam fora das consultas de banco e dos dados de sessão compartilhados. Corrigidos filtros contextuais de navegação, rótulos, seletores estreitos e organização do histórico no celular. A identificação de recorrências usa somente comparação local; o complemento LLM foi retirado. Acrescentados CSP, documentação de segurança/privacidade e auditoria dos requisitos, com notificações e seed ampliado explicitamente pendentes.
+
+**Verificação:** 39 arquivos JavaScript, build e 32 testes de regras/API aprovados. Suíte geral em dez áreas e oito larguras (320–1440 px), incluindo WebKit; suites de operações, rascunhos/portal e equipe aprovadas. Ao todo, 77 verificações axe sem violações nos cenários executados. Revisão dedicada com 29 capturas em 320/390/834/1440 px; inspeção das capturas e correções de campos cortados no celular. Na base em uso, conferida a ordenação real crescente/decrescente em Meus chamados para supervisor e técnico. Cópia completa local com banco encerrado; após atualização, comparação confirmou preservação de 179 chamados, históricos/equipes, 52 pessoas, 25 locais, 46 elevadores, 10 zonas e duas solicitações, além da conversão autorizada das prioridades. Backups, capturas e dados privados não são publicados.
+
+**Pendências e limites:** central de notificações, eventos individuais, lembretes de SLA, Web Push e seed ampliado com fotos/contatos ainda precisam ser implementados. Publicação HTTPS, validação de banco remoto e testes em aparelhos físicos continuam separados da verificação local. Detalhes em [Revisão de requisitos](docs/REVISAO-DE-REQUISITOS.md) e [Segurança e privacidade](docs/SEGURANCA-E-PRIVACIDADE.md). Sem integração automática à main ou implantação externa.
+
 ## 2026-11-26 — retirada da importação do escopo final do TCC
 
 **Motivo:** o responsável decidiu concentrar a apresentação na gestão dos chamados, indicadores e identificação de recorrências. A compatibilização de bases externas depende de análise e mapeamento de cada origem e fica como possibilidade futura, em vez de compor a entrega atual.

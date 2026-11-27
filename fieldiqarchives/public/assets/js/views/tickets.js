@@ -2,15 +2,19 @@ import {state,isSupervisor,canEdit,canClose,isOnTicket,attendanceWorker,personNa
 import {esc,fmtDate,fmtTime,currentPeriod,dueAt} from '../core/format.js';
 import {icon,heading,button,iconButton,badge,avatar,statusBadge,priorityBadge,workBadge,slaBadge,slaCell,emptyState,panelHeader,options,STATUS,PRIORITIES,WORKS,notice} from '../components/ui.js';
 import {renderTiming,renderAttachments} from './attachments.js';
+import {orderRows} from '../core/sorting.js';
+import {sortHeader,sortControls} from '../components/table-sort.js';
+import {PRIORITY_ORDER,priorityCode} from '../core/priorities.js';
 export function filteredTickets(){
   const f=state.ui.filters;
   const normalized=s=>String(s??'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   const q=normalized(f.search);
   return currentPeriod(state.chamados,f.period??'all').filter(c=>{
+    if(state.ui.route==='meuschamados'&&state.user?.role==='tecnico'&&!isOnTicket(c,state.user.matricula))return false;
     if(q&&![c.titulo,c.descricao,c.elevador_codigo,c.local_nome,'#'+c.id].some(v=>normalized(v).includes(q)))return false;
     if(f.status==='pending'&&!['aberto','em_andamento'].includes(c.status))return false;
     if(f.status&&f.status!=='pending'&&c.status!==f.status)return false;
-    if(f.priority&&c.prioridade!==f.priority)return false;
+    if(f.priority&&priorityCode(c.prioridade)!==priorityCode(f.priority))return false;
     if(f.work&&c.tipo_obra!==f.work)return false;
     if(f.technician&&!isOnTicket(c,f.technician))return false;
     if(f.equipment&&String(c.elevador_id)!==String(f.equipment))return false;
@@ -19,15 +23,20 @@ export function filteredTickets(){
     return true;
   });
 }
+export function sortedTickets(){
+  const scope=state.ui.route==='meuschamados'?'meuschamados':'chamados';
+  return orderRows(filteredTickets(),scope,{abertura:c=>Date.parse(c.aberto_em),chamado:c=>c.titulo,equipamento:c=>c.elevador_codigo,responsavel:c=>personName(c.tecnico),prioridade:c=>PRIORITY_ORDER[priorityCode(c.prioridade)],status:c=>c.status,prazo:c=>Date.parse(c.aberto_em)+c.sla_horas*3600000},{key:'abertura',direction:'desc'});
+}
 export function renderTickets(){
-  const matched=filteredTickets(),f=state.ui.filters;
+  const scope=state.ui.route==='meuschamados'?'meuschamados':'chamados';
+  const matched=sortedTickets(),f=state.ui.filters;
   const pageSize=window.matchMedia('(max-width:767px)').matches?5:10;
   const pages=Math.max(1,Math.ceil(matched.length/pageSize));
   state.ui.ticketPage=Math.min(Math.max(state.ui.ticketPage??1,1),pages);
   const start=(state.ui.ticketPage-1)*pageSize;
   const list=matched.slice(start,start+pageSize);
   const filterSelect=(id,label,labels,value)=>`<span class="select-wrap"><label for="${id}" class="sr-only">${label}</label><select id="${id}" data-filter="${id.replace('filter-','')}" aria-label="${label}">${options(labels,value)}</select>${icon('ChevronDown',16)}</span>`;
-  const counts=status=>state.chamados.filter(c=>!status||c.status===status).length;
+  const counts=status=>state.chamados.filter(c=>(scope!=='meuschamados'||state.user.role!=='tecnico'||isOnTicket(c,state.user.matricula))&&(!status||c.status===status)).length;
   const activeFilters=Boolean(f.search||f.status||f.priority||f.work||f.technician||f.equipment||f.flag||(f.period&&f.period!=='all'));
   const context=[
     f.technician?'Responsável: '+personName(f.technician):'',
@@ -36,7 +45,7 @@ export function renderTickets(){
     f.flag==='sla'?'Prazo excedido':f.flag==='unassigned'?'Sem responsável':'',
     f.period&&f.period!=='all'?'Período selecionado no painel':''
   ].filter(Boolean);
-  return heading('OPERAÇÃO','Chamados','Acompanhe cada atendimento, do registro à solução.',isSupervisor()?button('Novo chamado',{route:'novochamado',name:'Plus',tone:'primary'}):button('Meus atendimentos',{action:'quick-filter',attrs:'data-filter="mine"',name:'Wrench'}))+`
+  return heading('OPERAÇÃO',scope==='meuschamados'?'Meus chamados':'Chamados',scope==='meuschamados'?(state.user.role==='tecnico'?'Chamados sob sua responsabilidade ou com sua participação.':'Chamados da zona sob sua supervisão.'):'Acompanhe cada atendimento, do registro à solução.',isSupervisor()?button('Novo chamado',{route:'novochamado',name:'Plus',tone:'primary'}):button('Meus chamados',{route:'meuschamados',name:'Wrench'}))+`
     <section class="panel tickets-panel">
       <div class="tickets-tabs tabs" aria-label="Filtrar por situação">${[['','Todos'],['aberto','Abertos'],['em_andamento','Em andamento'],['resolvido','Resolvidos'],['cancelado','Cancelados']].map(([s,label])=>`<button type="button" class="tab ${f.status===s?'is-active':''}" data-action="ticket-status" data-status="${s}" aria-pressed="${f.status===s}">${label}<span class="tab__count">${counts(s)}</span></button>`).join('')}</div>
       <div class="tickets-toolbar toolbar">
@@ -45,8 +54,9 @@ export function renderTickets(){
         ${filterSelect('filter-work','Classificação',{'':'Todas as classificações',...WORKS},f.work)}
       </div>
       <div class="results-line"><span><strong>${matched.length}</strong> ${matched.length===1?'chamado encontrado':'chamados encontrados'}</span>${activeFilters?button('Limpar filtros',{action:'clear-ticket-filters',tone:'quiet',name:'X',className:'button--small'}):''}</div>
+      ${sortControls(scope,{abertura:'Data de abertura',chamado:'Chamado',equipamento:'Equipamento',responsavel:'Responsável',prioridade:'Prioridade',status:'Status',prazo:'Prazo'},{key:'abertura',direction:'desc'})}
       ${context.length?`<div class="active-filters">${context.map(label=>badge(label,'purple')).join('')}</div>`:''}
-      ${list.length?`<div class="table-wrap"><table class="data-table responsive-table ticket-table"><thead><tr><th>Chamado</th><th>Equipamento / local</th><th>Responsável</th><th>Prioridade</th><th>Status</th><th>Prazo</th><th><span class="sr-only">Ação</span></th></tr></thead><tbody>${list.map(c=>`<tr data-ticket-row="${c.id}">
+      ${list.length?`<div class="table-wrap"><table class="data-table responsive-table ticket-table"><thead><tr>${sortHeader(scope,'chamado','Chamado')}${sortHeader(scope,'equipamento','Equipamento / local')}${sortHeader(scope,'responsavel','Responsável')}${sortHeader(scope,'prioridade','Prioridade')}${sortHeader(scope,'status','Status')}${sortHeader(scope,'prazo','Prazo')}<th><span class="sr-only">Ação</span></th></tr></thead><tbody>${list.map(c=>`<tr data-ticket-row="${c.id}">
         <td class="card-title" data-label="Chamado"><div class="cell-stack"><span class="ticket-number">#${c.id} <span>${fmtDate(c.aberto_em,{dateOnly:true})}</span></span><strong class="cell-title">${esc(c.titulo)}</strong></div></td>
         <td data-label="Equipamento / local"><div class="cell-stack"><strong>${esc(c.elevador_codigo)}</strong><span class="text-muted text-small">${esc(c.local_nome)}</span></div></td>
         <td data-label="Responsável"><span class="text-small ${c.tecnico?'':'text-muted'}">${esc(personName(c.tecnico))}</span></td>
@@ -61,7 +71,9 @@ function fact(label,value){return `<div class="ticket-fact"><span>${label}</span
 function renderTicketTeam(c){
   const people=[...new Set([c.tecnico,...(c.equipe_matriculas??[])].filter(Boolean))];
   const join=state.user.role==='tecnico'&&c.tecnico&&!isOnTicket(c,state.user.matricula)&&['aberto','em_andamento'].includes(c.status);
-  return `<section class="ticket-section ticket-team"><div class="ticket-team-heading"><h3>Equipe do chamado</h3>${join?button('Participar do atendimento',{action:'ticket-join',name:'UserRoundPlus',tone:'secondary'}):''}${c.tecnico&&canClose(c)&&['aberto','em_andamento'].includes(c.status)?button('Liberar chamado',{action:'ticket-release',name:'UserRoundMinus',tone:'secondary'}):''}</div><div class="ticket-team-list">${people.map(mat=>{const p=state.pessoas.find(p=>p.matricula===mat);return `<div class="ticket-team-person">${p?avatar(p):''}<div><strong>${esc(personName(mat))}</strong><small>${esc(p?.cargo??'Técnico')}</small>${badge(mat===c.tecnico?'Responsável principal':'Participante',mat===c.tecnico?'purple':'neutral')}${mat!==c.tecnico&&['aberto','em_andamento'].includes(c.status)&&(isSupervisor()||mat===state.user.matricula)?button(mat===state.user.matricula?'Sair da equipe':'Remover participante',{action:'ticket-leave',attrs:'data-registration="'+esc(mat)+'"',tone:'quiet',className:'button--small'}):''}</div></div>`;}).join('')||'<p class="text-muted">Aguardando atribuição do responsável.</p>'}</div><p class="text-small text-muted">Cada participante registra seu período. O responsável principal e a gestão concluem o chamado.</p></section>`;
+  const available=state.pessoas.filter(p=>p.role==='tecnico'&&p.ativo&&p.zona_id===c.zona_id&&!people.includes(p.matricula));
+  const managerControls=isSupervisor()&&['aberto','em_andamento'].includes(c.status)?`<div class="ticket-team-controls"><label class="field" for="ticket-member"><span class="field__label">${c.tecnico?'Incluir técnico na equipe':'Definir responsável principal'}</span><span class="select-wrap"><select id="ticket-member" data-change="ticket-member" ${available.length?'':'disabled'}>${options({'':available.length?'Selecione um técnico':'Nenhum outro técnico disponível',...Object.fromEntries(available.map(p=>[p.matricula,p.nome]))},state.ui.ticket.memberSelection??'')}</select>${icon('ChevronDown',16)}</span></label>${button(c.tecnico?'Adicionar à equipe':'Definir responsável',{action:'ticket-add-member',name:'UserRoundPlus',tone:'secondary',attrs:available.length?'':'disabled'})}<p class="field__hint">${c.tecnico?'O responsável atual será mantido. A inclusão ficará registrada no histórico.':'O primeiro técnico será o responsável principal. Depois, você poderá incluir outros participantes. O SLA e a data de abertura serão preservados.'}</p></div>`:'';
+  return `<section class="ticket-section ticket-team"><div class="ticket-team-heading"><h3>Equipe do chamado</h3>${join?button('Participar do atendimento',{action:'ticket-join',name:'UserRoundPlus',tone:'secondary'}):''}${c.tecnico&&canClose(c)&&['aberto','em_andamento'].includes(c.status)?button('Liberar chamado',{action:'ticket-release',name:'UserRoundMinus',tone:'secondary'}):''}</div>${managerControls}<div class="ticket-team-list">${people.map(mat=>{const p=state.pessoas.find(p=>p.matricula===mat);return `<div class="ticket-team-person">${p?avatar(p):''}<div><strong>${esc(personName(mat))}</strong><small>${esc(p?.cargo??'Técnico')}</small>${badge(mat===c.tecnico?'Responsável principal':'Participante',mat===c.tecnico?'purple':'neutral')}${mat!==c.tecnico&&['aberto','em_andamento'].includes(c.status)&&(isSupervisor()||mat===state.user.matricula)?button(mat===state.user.matricula?'Sair da equipe':'Remover participante',{action:'ticket-leave',attrs:'data-registration="'+esc(mat)+'"',tone:'quiet',className:'button--small'}):''}</div></div>`;}).join('')||'<p class="text-muted">Aguardando atribuição do responsável.</p>'}</div><p class="text-small text-muted">Cada participante registra seu período. O responsável principal e a gestão concluem o chamado.</p></section>`;
 }
 function renderOverview(c){
   return `<div class="ticket-overview">
@@ -113,12 +125,12 @@ export function renderTicketDialog(){
     ${current.tab==='edit'&&canEdit(c)?`<button type="submit" form="ticket-edit-form" class="button button--primary" id="ticket-save">${icon('Check',18)}${current.draft.status==='resolvido'&&c.status!=='resolvido'?'Confirmar conclusão':'Salvar atendimento'}</button>`:canEdit(c)&&c.status==='resolvido'?button('Revisar registro',{action:'ticket-tab',attrs:'data-tab="edit"',tone:'secondary',name:'SquarePen'}):''}</div></div>`;
 }
 export function renderAi(ai,c){
-  if(!ai)return `<div class="assistant-panel"><div class="assistant-panel__heading"><span>${icon('Sparkles',19)}Assistente de diagnóstico</span></div><div class="loading-state"><span class="spinner"></span>Analisando o histórico do elevador…</div></div>`;
+  if(!ai)return `<div class="assistant-panel"><div class="assistant-panel__heading"><span>${icon('Sparkles',19)}Identificação de recorrências</span></div><div class="loading-state"><span class="spinner"></span>Analisando o histórico do elevador…</div></div>`;
   if(ai.error)return `<div class="assistant-panel"><p class="body-copy">${esc(ai.error)}</p>${button('Tentar novamente',{action:'retry-ai',name:'RefreshCw'})}</div>`;
   const refs=new Set(ai.evidencias_ids);
   const evidence=ai.evidencias.filter(e=>refs.has(e.id));
   return `<div class="assistant-panel">
-    <div class="assistant-panel__heading"><span>${icon('Sparkles',19)}Assistente de diagnóstico</span>${badge(ai.provedor==='openai'?'Síntese por IA':'Análise do histórico','purple')}</div>
+    <div class="assistant-panel__heading"><span>${icon('Sparkles',19)}Identificação de recorrências</span>${badge('Análise do histórico','purple')}</div>
     <h3>${esc(ai.resumo)}</h3><p>${esc(ai.hipotese)}</p>
     ${ai.intervalo_medio_dias!=null?`<div class="recurrence-note">${icon('Repeat2',16)}Intervalo médio anterior: <strong>${Number(ai.intervalo_medio_dias).toLocaleString('pt-BR')} dias</strong></div>`:''}
     <div class="assistant-suggestion"><span>Sugestão para análise</span><p>${esc(ai.sugestao)}</p></div>

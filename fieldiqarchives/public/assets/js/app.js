@@ -12,6 +12,9 @@ import {renderDatabase} from './views/database.js';
 import {renderUsers,renderUserDialog} from './views/users.js';
 import {renderRequests,renderReview} from './views/requests.js';
 import {duration,renderImageViewer} from './views/attachments.js';
+import {toggleSort} from './core/sorting.js';
+import {enhanceTables} from './components/table-enhancer.js';
+import {renderTechnicianProfile} from './views/technician-profile.js';
 
 const $=id=>document.getElementById(id);
 const jobs=new Set();
@@ -36,8 +39,8 @@ function updateJobChoices(){
 }
 let databaseRequest=0;
 const freshFilters=()=>({search:'',status:'',priority:'',work:'',technician:'',equipment:'',flag:'',period:'all'});
-const freshTicket=()=>({step:1,titulo:'',descricao:'',elevador_id:'',tipo_obra:'mod_parcial',prioridade:'media',sla_horas:24,tecnico:''});
-const views={dashboard:renderDashboard,chamados:renderTickets,novochamado:renderNewTicket,elevadores:renderAssets,tecnicos:renderTeam,usuarios:renderUsers,solicitacoes:renderRequests,perfil:renderProfile,banco:renderDatabase};
+const freshTicket=()=>({step:1,titulo:'',descricao:'',elevador_id:'',tipo_obra:'mod_parcial',prioridade:'B',sla_horas:24,tecnico:''});
+const views={dashboard:renderDashboard,chamados:renderTickets,meuschamados:renderTickets,perfiltecnico:renderTechnicianProfile,novochamado:renderNewTicket,elevadores:renderAssets,tecnicos:renderTeam,usuarios:renderUsers,solicitacoes:renderRequests,perfil:renderProfile,banco:renderDatabase};
 
 function toast(message){
   $('toast').textContent=message;
@@ -94,6 +97,7 @@ function renderView(preserve=false){
   const draw=()=>{
     disposeCharts();
     $('app-view').innerHTML=(views[state.ui.route]??renderDashboard)();
+    enhanceTables();
     if(state.ui.route==='dashboard')mountCharts();
   };
   if(preserve)preserveFocus(draw);else draw();
@@ -105,17 +109,32 @@ function focusNewStep(){
 }
 function navigate(route,{replace=false,focus=true}={}){
   if(!state.user)return;
+  if(route.startsWith('tecnico/')){state.ui.profileRegistration=decodeURIComponent(route.slice(8));route='perfiltecnico';}
   if(!routes[route])route='dashboard';
-  if(routes[route].supervisor&&!isSupervisor()){toast('Esta área é exclusiva do supervisor.');return;}
+  if(routes[route].supervisor&&!isSupervisor())route='dashboard';
+  if(routes[route].field&&!['tecnico','supervisor'].includes(state.user.role))route='dashboard';
+  if(route==='perfiltecnico'&&!state.ui.profileRegistration)route='tecnicos';
+  if(route==='meuschamados'&&state.ui.route!==route)state.ui.filters=freshFilters();
   state.ui.route=route;
-  if(route==='chamados')state.ui.ticketPage=1;
-  const url='#'+route;
+  if(['chamados','meuschamados'].includes(route))state.ui.ticketPage=1;
+  const url=route==='perfiltecnico'?'#tecnico/'+encodeURIComponent(state.ui.profileRegistration):'#'+route;
   if(location.hash!==url)history[replace?'replaceState':'pushState'](null,'',url);
   closeMenu(false);
   renderShell();renderView();
   if(focus){window.scrollTo({top:0,behavior:'auto'});$('page-title')?.focus({preventScroll:true});}
   if(route==='banco'&&!state.ui.database.info)void loadDatabase();
   if(route==='usuarios')void loadUsers();
+  if(route==='perfiltecnico')void loadTechnicianProfile();
+}
+async function loadTechnicianProfile(){
+  const registration=state.ui.profileRegistration,user=state.user?.matricula;
+  state.ui.technicianProfile={loading:true,page:1};renderView();
+  try{
+    const data=await api('/tecnicos/'+encodeURIComponent(registration));
+    if(state.user?.matricula!==user||state.ui.profileRegistration!==registration)return;
+    state.ui.technicianProfile={data,page:1};
+  }catch(error){if(state.user?.matricula!==user)return;state.ui.technicianProfile={error:error.message};}
+  if(state.ui.route==='perfiltecnico')renderView();
 }
 async function reloadData(){
   const data=await api('/bootstrap');
@@ -132,6 +151,7 @@ function showLogin(){
   state.user=null;
   for(const key of ['zonas','pessoas','locais','elevadores','chamados','usuarios','solicitacoes'])state[key]=[];
   state.ui.users={};
+  state.ui.sorts={};state.ui.technicianProfile=null;state.ui.profileRegistration=null;
   state.ui.ticket=null;state.ui.newTicket=freshTicket();state.ui.filters=freshFilters();
   databaseRequest++;
   Object.assign(state.ui.database,{info:null,data:null,search:'',error:null});
@@ -145,7 +165,7 @@ async function enterAccount(login,password){
   await reloadData();
   $('login-root').hidden=true;$('app-shell').hidden=false;
   const initial=location.hash.slice(1);
-  navigate(routes[initial]&&(!routes[initial].supervisor||isSupervisor())?initial:'dashboard',{replace:true});
+  navigate(initial||'dashboard',{replace:true});
 }
 function syncMenu(){
   const mobile=window.matchMedia('(max-width:767px)').matches;
@@ -189,7 +209,7 @@ async function loadSuggestion(){
   if(state.ui.ticket===current&&current.tab==='overview'&&$('ai-panel'))$('ai-panel').innerHTML=renderAi(current.ai,current.record);
 }
 function openTicket(id){
-  const c=state.chamados.find(c=>c.id===Number(id));
+  const c=state.chamados.find(c=>c.id===Number(id))??state.ui.technicianProfile?.data?.chamados.find(c=>c.id===Number(id));
   if(!c)return;
   state.ui.ticket={record:c,tab:'overview',ai:null,feedback:null,attachments:null,intervals:null,clockLoadedAt:Date.now(),draft:{
     descricao:c.descricao??'',solucao:c.solucao??'',status:c.status,tecnico:c.tecnico??'',tipo_obra:c.tipo_obra,prioridade:c.prioridade,sla_horas:c.sla_horas
@@ -257,7 +277,7 @@ function quickFilter(value){
   if(value==='mine'){f.technician=state.user.matricula;f.status='pending';}
   if(value==='pending')f.status='pending';
   if(value==='resolved')f.status='resolvido';
-  if(value==='critical'){f.priority='critica';f.status='pending';}
+  if(value==='critical'){f.priority='A';f.status='pending';}
   if(value==='sla'){f.flag='sla';f.status='pending';}
   if(value==='unassigned'){f.flag='unassigned';f.status='pending';}
   navigate('chamados');
@@ -279,7 +299,11 @@ document.addEventListener('click',event=>{
   if(target.dataset.route){event.preventDefault();navigate(target.dataset.route);return;}
   const action=target.dataset.action;
   if(action==='open-ticket'){openTicket(target.dataset.id);return;}
+  if(action==='sort-table'){toggleSort(target.dataset.scope,target.dataset.key);state.ui.ticketPage=1;if(target.dataset.scope==='perfiltecnico'&&state.ui.technicianProfile)state.ui.technicianProfile.page=1;renderView();return;}
+  if(action==='person-profile'){state.ui.profileRegistration=target.dataset.registration;navigate('perfiltecnico');return;}
+  if(action==='profile-page'){state.ui.technicianProfile.page=Number(target.dataset.page);renderView();return;}
   if(action==='user-open'){
+    if(!isAdmin()){toast('A gestão de acesso é exclusiva do Administrativo.');return;}
     const person=state.usuarios.find(p=>p.matricula===target.dataset.registration);
     const draft=userDrafts.get(draftKey(person?.matricula));
     $('utility-dialog').innerHTML=renderUserDialog(person,draft);state.ui.utility={kind:'user'};
@@ -339,6 +363,12 @@ document.addEventListener('click',event=>{
   void execute(target,action,async()=>{
     if(action==='demo-login'){await enterAccount(target.dataset.login,'tk2026');}
     else if(action==='logout'){await api('/auth/logout',{method:'POST'});showLogin();}
+    else if(action==='ticket-add-member'){
+      const c=state.ui.ticket.record,matricula=$('ticket-member')?.value;
+      if(!matricula){$('ticket-member')?.focus();toast('Selecione um técnico da zona do chamado.');return;}
+      const result=await api('/chamados/'+c.id+'/equipe',{method:'POST',body:{matricula,revisao:c.revisao}});
+      await refreshTicket(c.id);toast(result.responsavel?'Responsável definido. O atendimento ainda não foi iniciado.':'Técnico incluído na equipe. Inclusão registrada no histórico.');
+    }
     else if(action==='ticket-join'){
       const id=state.ui.ticket.record.id;await api('/chamados/'+id+'/equipe',{method:'POST'});await refreshTicket(id);toast('Você agora participa da equipe deste chamado.');
     }
@@ -359,6 +389,7 @@ document.addEventListener('click',event=>{
     }else if(action==='refresh'){
       await reloadData();renderShell();renderView();
       if(state.ui.route==='banco')await loadDatabase();
+      if(state.ui.route==='perfiltecnico')await loadTechnicianProfile();
       toast('Dados atualizados.');
     }else if(action==='team-remove'){
       await api('/equipe',{method:'POST',body:{matricula:target.dataset.registration,remover:true}});
@@ -427,6 +458,7 @@ document.addEventListener('submit',event=>{
 
 document.addEventListener('input',event=>{
   const target=event.target;
+  if(target.dataset.input==='profile-ticket-search'){state.ui.technicianProfile.search=target.value;state.ui.technicianProfile.page=1;renderView(true);}
   if(target.closest('form[data-form="user"]'))rememberUserDraft();
   if(target.dataset.newfield){
     state.ui.newTicket[target.dataset.newfield]=target.value;
@@ -440,6 +472,13 @@ document.addEventListener('input',event=>{
 });
 document.addEventListener('change',event=>{
   const target=event.target;
+  if(target.dataset.change==='ticket-member'&&state.ui.ticket)state.ui.ticket.memberSelection=target.value;
+  if(target.dataset.change==='table-order'){
+    const controls=target.closest('[data-sort-controls]'),scope=controls.dataset.sortControls;
+    state.ui.sorts[scope]={key:controls.querySelector('[name="sort-key"]').value,direction:controls.querySelector('[name="sort-direction"]').value};
+    state.ui.ticketPage=1;if(state.ui.technicianProfile)state.ui.technicianProfile.page=1;renderView(true);return;
+  }
+  if(target.dataset.change==='profile-ticket-status'){state.ui.technicianProfile.status=target.value;state.ui.technicianProfile.page=1;renderView();}
   if(target.id==='user-role')updateJobChoices();
   if(target.id==='review-action'){
     const accept=target.value==='aceitar';$('review-accept').hidden=!accept;$('review-return-field').hidden=accept;$('review-return').required=!accept;$('review-sla').required=accept;
@@ -499,7 +538,7 @@ setInterval(()=>{
 },1000);
 setInterval(()=>{
   if(!state.user||document.hidden||$('ticket-dialog').open||$('utility-dialog').open||jobs.size)return;
-  if(!['dashboard','chamados','tecnicos','perfil','solicitacoes'].includes(state.ui.route))return;
+  if(!['dashboard','chamados','meuschamados','tecnicos','perfil','solicitacoes'].includes(state.ui.route))return;
   void execute(null,'auto-refresh',async()=>{await reloadData();renderView(true);});
 },30000);
 

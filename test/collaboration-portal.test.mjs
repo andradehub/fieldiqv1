@@ -17,7 +17,7 @@ test('cargos são restritos ao perfil, incluindo estagiário de campo; nomes leg
  assert.equal((await post({cargo:'Cargo arbitrário'})).status,400);
  assert.equal((await post({})).status,201);
  const p=(await request('/usuarios')).data.usuarios.find(p=>p.matricula==='INTERN-TEST');assert.equal(p.cargo,'Estagiário de campo');
- assert.equal((await request('/usuarios/TK-CAP-002',{cookie:supervisor,method:'PATCH',body:{telefone:'(21) 00000-1234'}})).status,200);
+ assert.equal((await request('/usuarios/TK-CAP-002',{method:'PATCH',body:{telefone:'(21) 00000-1234'}})).status,200);
 });
 test('equipe mantém responsável, permite períodos simultâneos e pausa apenas o técnico que acionou',async()=>{
  const created=await request('/chamados',{cookie:supervisor,method:'POST',body:{titulo:'Equipe compartilhada',elevador_id:1,tecnico:'TK-CAP-002',sla_horas:24}});const id=created.data.id;
@@ -87,7 +87,7 @@ test('solicitação, lembrete, triagem e encerramento preservam a abertura origi
  assert.equal((await request('/solicitacoes',{cookie:interior})).data.solicitacoes.length,0);
  assert.equal((await request('/solicitacoes',{cookie:supervisor})).data.solicitacoes[0].total_lembretes,1);
  await db.query("UPDATE solicitacoes_clientes SET aberto_em=now()-interval '2 days' WHERE id=$1",[id]);
- const accepted=await request('/solicitacoes/'+id+'/triagem',{cookie:supervisor,method:'POST',body:{acao:'aceitar',tecnico:'TK-CAP-001',prioridade:'alta',sla_horas:24}});assert.equal(accepted.status,200);const call=accepted.data.chamado_id;
+ const accepted=await request('/solicitacoes/'+id+'/triagem',{cookie:supervisor,method:'POST',body:{acao:'aceitar',tecnico:'TK-CAP-001',prioridade:'A',sla_horas:24}});assert.equal(accepted.status,200);const call=accepted.data.chamado_id;
  const row=(await db.query('SELECT * FROM vw_chamados_metricas WHERE id=$1',[call])).rows[0];assert.ok(row.sla_vencido);assert.ok(new Date(row.aberto_em)<new Date(Date.now()-86400000));
  assert.equal((await request('/solicitacoes/'+id+'/triagem',{cookie:supervisor,method:'POST',body:{acao:'aceitar'}})).status,409);
  assert.equal((await request('/portal/solicitacoes/'+id+'/lembrete',{cookie:client,method:'POST'})).status,409);

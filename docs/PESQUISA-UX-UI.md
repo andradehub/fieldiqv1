@@ -107,7 +107,7 @@ Esses indicadores não foram adicionados como números fictícios ao painel.
 | Visão geral | Indicadores no primeiro nível, alertas acionáveis, gráficos e fila ordenada por atenção. |
 | Chamados | Menos colunas, busca por equipamento/local, filtros com contagem, cartões e paginação: cinco registros por página no celular e dez nas demais larguras. |
 | Detalhes | Painel lateral no computador e tela integral no celular; abas para visão geral, atendimento e histórico. |
-| Assistente | Evidências recolhidas por padrão, distinção entre análise do histórico e síntese generativa, avaliação de utilidade. |
+| Identificação de recorrências | Evidências recolhidas por padrão, referências ao histórico, avaliação de utilidade e indicação explícita de que o técnico precisa avaliar o caso. Sem LLM. |
 | Novo chamado | Três etapas com revisão e contexto do equipamento, sem expor todo o formulário ao mesmo tempo. |
 | Elevadores / locais | Consulta em primeiro plano; cadastros abertos sob demanda e histórico acessível por equipamento. |
 | Equipe | Volume de atendimento e filtros claros; sem classificação simplista por cor de “bom” ou “ruim”. |
