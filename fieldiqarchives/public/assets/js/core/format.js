@@ -1,3 +1,4 @@
+import {priorityCode} from './priorities.js';
 export const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const initials=value=>String(value??'').split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
 export const fmtNumber=value=>Number(value??0).toLocaleString('pt-BR');
@@ -30,5 +31,5 @@ export function currentPeriod(tickets,period){
   return days?tickets.filter(c=>new Date(c.aberto_em)>=Date.now()-days*86400000):tickets;
 }
 export function attentionScore(c){
-  return Number(c.sla_vencido)*100+({critica:40,alta:30,media:20,baixa:10}[c.prioridade]??0)+Number(!c.tecnico)*5;
+  return Number(c.sla_vencido)*100+({A:40,B:20,C:10}[priorityCode(c.prioridade)]??0)+Number(!c.tecnico)*5;
 }

@@ -15,7 +15,9 @@
     "db:export": "node --env-file-if-exists=.env scripts/database.mjs export",
     "admin:create": "node --env-file-if-exists=.env scripts/create-admin.mjs",
     "test:browser": "node test/browser.mjs",
-    "check": "node scripts/check.mjs"
+    "check": "node scripts/check.mjs",
+    "push:keys": "node --env-file-if-exists=.env scripts/push-keys.mjs",
+    "demo:expandir": "node --env-file-if-exists=.env scripts/expand-demo.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.16",
@@ -23,7 +25,8 @@
     "chart.js": "4.4.1",
     "express": "5.3.0",
     "lucide": "^1.75.0",
-    "pg": "8.23.1"
+    "pg": "8.23.1",
+    "web-push": "4.0.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

@@ -13,7 +13,7 @@ O catálogo usa funções documentadas por empresas do setor e as nomenclaturas 
 
 As listas são separadas por perfil em `core/jobs.js`, compartilhado entre interface e API. Técnico, supervisor, Administrativo e cliente determinam as permissões. O cargo selecionado descreve o vínculo e não concede acesso extra. Um estagiário de campo utiliza o perfil técnico; não se presume qualificação para procedimentos físicos a partir do cargo.
 
-Novos cadastros exigem um cargo do perfil escolhido. Cargos antigos podem permanecer ao editar um registro sem mudar seu perfil; isso preserva o histórico. Migrações mantêm nomenclaturas da origem. Novas opções não são criadas digitando texto livre no formulário.
+Novos cadastros exigem um cargo do perfil escolhido. Cargos antigos podem permanecer ao editar um registro sem mudar seu perfil; isso preserva o histórico e as nomenclaturas já gravadas. Novas opções não são criadas digitando texto livre no formulário.
 
 ## Cadastro e rascunho
 
@@ -26,6 +26,8 @@ Os rascunhos não são gravados em localStorage, arquivos ou banco; uma saída d
 Miniaturas usam enquadramento proporcional, sem cortar a imagem para preencher o cartão. O botão **Ampliar imagem** abre um visualizador dentro da aplicação, com imagem completa, ampliação/redução e rolagem quando necessário. O download continua opcional. O visualizador usa a mesma rota autenticada e o mesmo escopo de zona dos anexos.
 
 ## Atendimento em equipe
+
+Na Visão geral, o supervisor/Administrativo seleciona técnicos ativos da zona. Sem responsável, a primeira inclusão define o principal; com responsável, adiciona participante. Ambas registram autoria e horário, inclusive em atendimento já iniciado. Gestão de usuários é exclusiva do Administrativo: supervisor consulta contatos sem CPF ou login.
 
 O responsável principal continua no chamado. Outros técnicos ativos da mesma zona podem escolher **Participar do atendimento**, inclusive colaboradores com cargo de estagiário de campo. A Visão geral mostra a equipe e seus cargos.
 
@@ -64,14 +66,6 @@ Fluxo:
 
 O acesso local fictício é `cliente.barra`, senha `tk2026`, vinculado ao local demonstrativo da Barra. Acesso rápido com senha conhecida é exclusivo do modo local de demonstração; o modo remoto usa a senha de demonstração configurada no servidor.
 
-## Arquivo de demonstração
+## Dados de demonstração
 
-`fieldiqarchives/public/demonstracao-fieldiq.json` pode ser baixado em **Administrativo → Importar dados → Migrar cadastros e histórico → Baixar base fictícia com equipes e fotos**.
-
-Inclui 10 zonas, 40 colaboradores, 20 locais, 40 elevadores, 160 chamados, 280 registros de histórico, 40 participações adicionais e 160 períodos de trabalho. Os perfis incluem supervisores, técnicos de diferentes níveis e estagiários de campo, com nomes, CPFs sintéticos, contatos reservados para exemplo e datas de admissão. As fotos de perfil são **avatares ilustrados gerados localmente**, não retratos de pessoas reais.
-
-Entre os chamados há casos resolvidos dentro e fora do SLA, chamados abertos, atendimentos pausados e recorrência no mesmo elevador. Os períodos encerrados da origem são preservados, sem inventar atividade em execução.
-
-Para importar, entre como Administrativo, selecione o arquivo, valide e confirme. O pacote foi preparado para coexistir com a demonstração inicial: reutiliza as zonas e cria matrículas, locais, equipamentos e chamados com identificadores próprios. O reenvio não duplica registros. Colaboradores importados ficam inativos; para testar um login deles, o Administrativo precisa ativá-lo e definir uma senha. O arquivo não é importado automaticamente na base do usuário.
-
-`scripts/generate-demo.mjs` permite regenerar o arquivo; as datas de referência são fixas para manter o teste reproduzível. Não altere uma origem já importada para sobrescrever registros: use as telas de edição ou uma origem nova para outro conjunto fictício.
+A versão final utiliza a base fictícia inicial gerada pelo servidor e preserva os registros já existentes. A importação de arquivos e seu pacote adicional foram retirados do escopo em 26/11/2026. Nenhuma conta, foto ou chamado já gravado é removido por essa decisão. Novos colaboradores e equipamentos são cadastrados pelas telas próprias.

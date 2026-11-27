@@ -7,7 +7,7 @@ import {createApp} from '../server/app.mjs';
 import AxeBuilder from '@axe-core/playwright';
 process.env.PLAYWRIGHT_BROWSERS_PATH=path.join(projectRoot,'.fieldiq','browsers');
 const {chromium,webkit}=await import('playwright');
-const db=await createDatabase({dataDir:'memory://',demo:true}),server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');
+const db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false}),server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');
 const base='http://127.0.0.1:'+server.address().port,output=path.join(projectRoot,'test-results','followups');await mkdir(output,{recursive:true});
 const errors=[],scans=[];
 async function check(page,label){
@@ -34,7 +34,6 @@ try{
    await page.locator('#ticket-files').setInputFiles({name:'panorama.png',mimeType:'image/png',buffer:Buffer.from(encoded,'base64')});await page.locator('.attachment-preview').waitFor();assert.equal(await page.locator('.attachment-preview img').evaluate(n=>getComputedStyle(n).objectFit),'contain');
    await page.locator('.attachment-preview').click();await page.locator('#image-viewer-img').evaluate(n=>n.decode());let size=await page.locator('#image-viewer-img').boundingBox();assert.ok(Math.abs(size.width/size.height-1600/300)<.1);await check(page,engine+' '+width+' image viewer');await page.screenshot({path:path.join(output,engine+'-'+width+'-imagem.png')});
    await page.locator('[data-action="image-zoom"][data-step="0.5"]').click();assert.equal(await page.locator('#image-zoom-value').innerText(),'150%');await page.locator('[data-action="image-close"]').click();assert.ok(await page.locator('#ticket-dialog').evaluate(n=>n.open));await page.keyboard.press('Escape');
-   await nav(page,'importacao');await page.locator('#import-file').setInputFiles(path.join(projectRoot,'fieldiqarchives/public/demonstracao-fieldiq.json'));await page.locator('#import-validate').click();await page.locator('#import-submit').waitFor({timeout:60000});await check(page,engine+' '+width+' complete import preview');await page.keyboard.press('Escape');
    // Separate client context, with a different cookie and completely different interface.
    const clientContext=await browser.newContext({viewport:{width,height:width===1440?1000:844},isMobile:width<768,hasTouch:true,reducedMotion:'reduce'}),client=await clientContext.newPage();client.on('pageerror',e=>errors.push(e.message));await client.goto(base+'/cliente.html');await client.locator('[data-action="client-demo"]').click();await client.locator('.client-welcome').waitFor();await check(client,engine+' '+width+' client portal');
    await client.locator('#client-new>summary').click();await client.locator('#client-elevator').selectOption('1');await client.locator('#client-title').fill('Cliente '+engine+' '+width);await client.locator('#client-description').fill('Problema fictício comunicado pelo cliente.');await client.locator('[data-client-form="request"] button[type="submit"]').click();await client.locator('.client-request').filter({hasText:'Cliente '+engine+' '+width}).waitFor();

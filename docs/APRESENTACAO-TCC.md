@@ -1,4 +1,4 @@
-# Roteiro de demonstração do FieldIQ
+# Arquitetura e identificação de recorrências do FieldIQ
 
 ## Arquitetura para explicar
 
@@ -14,7 +14,7 @@ flowchart LR
   L -. síntese validada .-> H
 ```
 
-A interface exibe os dados; a API autentica e autoriza cada operação; o banco persiste os registros e calcula métricas. A análise recupera evidências e apresenta uma hipótese. O modelo generativo é um complemento configurável, não um requisito para o banco funcionar.
+A interface exibe os dados; a API autentica e autoriza cada operação; o banco persiste os registros e calcula métricas. A análise recupera evidências e apresenta uma hipótese. A identificação de recorrências é local e não usa LLM.
 
 O modo local executa o PostgreSQL embutido do PGlite e guarda os arquivos no disco do servidor. Para mostrar um serviço PostgreSQL separado em pgAdmin/DBeaver, há configuração Docker opcional e suporte a DATABASE_URL.
 
@@ -34,7 +34,7 @@ erDiagram
   PESSOAS ||--o{ AVALIACOES_IA : avalia
 ```
 
-Também existem importações e sessões. A relação do técnico com o chamado é opcional até a atribuição; a relação de todo chamado com um elevador é obrigatória.
+Também existem sessões. A importação de dados não integra o escopo atual. A relação do técnico com o chamado é opcional até a atribuição; a relação de todo chamado com um elevador é obrigatória.
 
 ## Fluxo da apresentação
 
@@ -81,11 +81,11 @@ ORDER BY h.data DESC;
 
 ## Como explicar a análise local
 
-O texto é normalizado, recebe pesos TF-IDF e é comparado por similaridade de cosseno. Termos de componentes complementam a recuperação. O sistema dá prioridade a casos do mesmo elevador e recupera somente registros anteriores e da região autorizada.
+O texto é normalizado, recebe pesos TF-IDF e é comparado por similaridade de cosseno. Termos de componentes complementam a recuperação. O sistema dá prioridade a casos do mesmo elevador e recupera somente registros anteriores e da zona autorizada.
 
 O intervalo médio mede a distância temporal entre registros semelhantes anteriores. Ele não prevê a próxima falha. A contagem de soluções repetidas não mede taxa de sucesso clínico/técnico nem confirma causalidade. Não se apresenta o escore textual como confiança diagnóstica.
 
-Com um provedor generativo configurado, o modelo recebe os casos recuperados e produz texto estruturado, com IDs de evidência validados. Se a resposta não puder ser validada, a aplicação informa que está usando análise local.
+A implementação atual usa somente identificação local de recorrências, com referências aos chamados anteriores. O técnico avalia as condições atuais e outras causas; a indicação não representa uma solução confirmada.
 
 ## Escopo e limites desta versão
 
@@ -94,4 +94,4 @@ Com um provedor generativo configurado, o modelo recebe os casos recuperados e p
 - Não há integração efetiva com ERP, telemetria ou sensores do equipamento.
 - O técnico deve registrar o diagnóstico e a solução realmente aplicados para enriquecer o histórico.
 - A recuperação por TF-IDF é uma base explicável para o TCC; uma avaliação com dados reais é necessária para medir qualidade e calibrar os limiares.
-- A API remota de IA e o PostgreSQL hospedado exigem configuração própria; a validação entregue foi local.
+- O PostgreSQL hospedado exige configuração própria; a validação registrada foi local.

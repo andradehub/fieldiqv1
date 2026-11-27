@@ -1,6 +1,8 @@
+import {registerPushRoutes} from './push.mjs';
+import {registerNotificationJobRoute} from './notification-jobs.mjs';
+import {registerNotificationRoutes,notifyAssignment} from './notifications.mjs';
 import express from 'express';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
 import { publicPerson, verifyPassword, readToken, hashToken, newToken } from './auth.mjs';
 import { projectRoot, schemaSQL } from './db.mjs';
 import { suggestForTicket } from './ai.mjs';
@@ -8,8 +10,9 @@ import {ApiError,insist,text,optionalText,oneOf,integer,supervisor,canEdit,canCl
 import {registerUserRoutes} from './users.mjs';
 import {registerAttachmentRoutes} from './attachments.mjs';
 import {registerAttendanceRoutes,closeIntervals,beginInterval} from './attendance.mjs';
-import {registerMigrationRoutes} from './migration.mjs';
 import {registerPortalRoutes,internalRequests} from './portal.mjs';
+import {PRIORITIES} from '../fieldiqarchives/public/assets/js/core/priorities.js';
+import {registerTechnicianRoutes} from './technicians.mjs';
 
 export {ApiError};
 async function equipment(db, id, user) {
@@ -19,49 +22,48 @@ async function equipment(db, id, user) {
   insist(canReadZone(user,e.zona_id) && e.ativo, 403, 'Escolha um elevador ativo da sua zona.');
   return e;
 }
-async function technician(db, matricula, zone, allowInactive=false) {
+async function technician(db, matricula, zone) {
   if (!matricula) return null;
-  const result = await db.query("SELECT matricula FROM pessoas WHERE matricula=$1 AND role='tecnico' AND (ativo OR $3::boolean) AND zona_id=$2", [text(matricula,'Matrícula',40),zone,allowInactive]);
+  const result = await db.query("SELECT matricula FROM pessoas WHERE matricula=$1 AND role='tecnico' AND ativo AND zona_id=$2", [text(matricula,'Matrícula',40),zone]);
   insist(result.rows.length, 400, 'O técnico precisa pertencer à equipe da zona do elevador.');
   return matricula;
 }
 const works = ['obra_nova','mod_integral','mod_parcial'];
-const priorities = ['baixa','media','alta','critica'];
+const priorities = Object.keys(PRIORITIES);
 const statuses = ['aberto','em_andamento','resolvido','cancelado'];
 
-export async function insertTicket(db, body, user, imported = false) {
+export async function insertTicket(db, body, user, {openedAt} = {}) {
   const e = await equipment(db, body.elevador_id, user);
-  const tech = await technician(db, body.tecnico || null, e.zona_id,imported);
-  const status = imported ? oneOf(body.status ?? 'aberto',statuses,'Status') : 'aberto';
+  const tech = await technician(db, body.tecnico || null, e.zona_id);
+  const status = 'aberto';
   const title = text(body.titulo,'Título',200);
   const desc = optionalText(body.descricao);
   const solution = optionalText(body.solucao);
-  const open = imported && body.aberto_em ? new Date(body.aberto_em) : new Date();
+  const open = openedAt ? new Date(openedAt) : new Date();
   const close = status === 'resolvido' && body.resolvido_em ? new Date(body.resolvido_em) : null;
   insist(Number.isFinite(open.getTime()) && open.getTime() <= Date.now() + 60000, 400, 'Data de abertura inválida ou futura.');
   insist(status !== 'resolvido' || (solution && close && Number.isFinite(close.getTime()) && close >= open && close.getTime() <= Date.now() + 60000), 400, 'Chamado resolvido exige solução e data de resolução válidas.');
   const type = oneOf(body.tipo_obra ?? 'mod_parcial',works,'Classificação');
-  const priority = oneOf(body.prioridade ?? 'media',priorities,'Prioridade');
+  const priority = oneOf(body.prioridade ?? 'B',priorities,'Prioridade');
   const sla = integer(body.sla_horas ?? 24,'SLA',1,8760);
-  const key = imported ? createHash('sha256').update(JSON.stringify([e.id,title,desc,status,body.aberto_em ?? '',body.resolvido_em ?? '',solution])).digest('hex') : null;
   const row = await db.query(
     'INSERT INTO chamados (elevador_id,titulo,descricao,tipo_obra,prioridade,status,sla_horas,tecnico_matricula,aberto_em,resolvido_em,solucao,criado_por,chave_importacao) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id',
-    [e.id,title,desc,type,priority,status,sla,tech,open.toISOString(),close?.toISOString() ?? null,solution || null,user.matricula,key]
+    [e.id,title,desc,type,priority,status,sla,tech,open.toISOString(),close?.toISOString() ?? null,solution || null,user.matricula,null]
   );
   const id = row.rows[0].id;
-  await db.query('INSERT INTO historico_chamados (chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)', [id,user.matricula,imported ? 'Chamado importado com identificação do elevador.' : 'Chamado criado.']);
+  await db.query('INSERT INTO historico_chamados (chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)', [id,user.matricula,'Chamado criado.']);
+  await notifyAssignment(db,{id,zona_id:e.zona_id},user,{atual:tech,chave:'criado:'+id});
   return id;
 }
 
 // Only domain data is exposed. Password hashes and sessions never enter this catalogue.
 const tableQueries = {
   zonas: 'SELECT * FROM zonas WHERE ($1::boolean OR id=$2)',
-  pessoas: 'SELECT matricula,nome,role,cargo,regiao,zona_id,login,ativo FROM pessoas WHERE ($1::boolean OR zona_id=$2)',
+  pessoas: 'SELECT matricula,nome,role,cargo,regiao,zona_id,ativo FROM pessoas WHERE ($1::boolean OR zona_id=$2)',
   locais: 'SELECT l.* FROM locais l WHERE ($1::boolean OR l.zona_id=$2)',
   elevadores: 'SELECT e.* FROM elevadores e JOIN locais l ON l.id=e.local_id WHERE ($1::boolean OR l.zona_id=$2)',
   chamados: 'SELECT c.* FROM chamados c JOIN vw_chamados_metricas v ON v.id=c.id WHERE ($1::boolean OR v.zona_id=$2)',
   historico_chamados: 'SELECT h.* FROM historico_chamados h JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
-  importacoes: 'SELECT i.* FROM importacoes i JOIN pessoas p ON p.matricula=i.usuario_matricula WHERE ($1::boolean OR p.zona_id=$2)',
   sugestoes_ia: 'SELECT s.* FROM sugestoes_ia s JOIN vw_chamados_metricas c ON c.id=s.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
   avaliacoes_ia: 'SELECT a.* FROM avaliacoes_ia a JOIN sugestoes_ia s ON s.id=a.sugestao_id JOIN vw_chamados_metricas c ON c.id=s.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
   atendimentos: 'SELECT a.* FROM atendimentos a JOIN vw_chamados_metricas c ON c.id=a.chamado_id WHERE ($1::boolean OR c.zona_id=$2)',
@@ -80,7 +82,7 @@ export async function exportDomainSQL(db, user={role:'administrativo'}) {
   let sql = '-- FieldIQ: exportacao de dados de dominio.\n-- Nao inclui senhas, CPF, contatos, sessoes ou arquivos anexados; nao substitui backup completo.\nBEGIN;\n' + schemaSQL + '\n';
   for (const [table,query] of Object.entries(tableQueries)) {
     if(table==='anexos_chamados')continue;
-    const result = table==='pessoas' ? await db.query("SELECT matricula,nome,role,cargo,CASE WHEN ($1::boolean OR zona_id=$2) THEN regiao ELSE NULL END AS regiao,CASE WHEN ($1::boolean OR zona_id=$2) THEN zona_id ELSE NULL END AS zona_id,CASE WHEN ($1::boolean OR zona_id=$2) THEN login ELSE NULL END AS login,ativo FROM pessoas WHERE ($1::boolean OR zona_id=$2) OR matricula IN (SELECT criado_por FROM vw_chamados_metricas WHERE zona_id=$2 UNION SELECT tecnico_matricula FROM vw_chamados_metricas WHERE zona_id=$2 UNION SELECT h.usuario_matricula FROM historico_chamados h JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE c.zona_id=$2 UNION SELECT a.usuario_matricula FROM avaliacoes_ia a JOIN sugestoes_ia s ON s.id=a.sugestao_id JOIN vw_chamados_metricas c ON c.id=s.chamado_id WHERE c.zona_id=$2 UNION SELECT a.tecnico_matricula FROM atendimentos a JOIN vw_chamados_metricas c ON c.id=a.chamado_id WHERE c.zona_id=$2)",params) : await db.query(query,params);
+    const result = table==='pessoas' ? await db.query("SELECT matricula,nome,role,cargo,CASE WHEN ($1::boolean OR zona_id=$2) THEN regiao ELSE NULL END AS regiao,CASE WHEN ($1::boolean OR zona_id=$2) THEN zona_id ELSE NULL END AS zona_id,NULL::text AS login,ativo FROM pessoas WHERE ($1::boolean OR zona_id=$2) OR matricula IN (SELECT criado_por FROM vw_chamados_metricas WHERE zona_id=$2 UNION SELECT tecnico_matricula FROM vw_chamados_metricas WHERE zona_id=$2 UNION SELECT h.usuario_matricula FROM historico_chamados h JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE c.zona_id=$2 UNION SELECT a.usuario_matricula FROM avaliacoes_ia a JOIN sugestoes_ia s ON s.id=a.sugestao_id JOIN vw_chamados_metricas c ON c.id=s.chamado_id WHERE c.zona_id=$2 UNION SELECT a.tecnico_matricula FROM atendimentos a JOIN vw_chamados_metricas c ON c.id=a.chamado_id WHERE c.zona_id=$2)",params) : await db.query(query,params);
     for (const row of result.rows) {
       const keys = Object.keys(row);
       sql += 'INSERT INTO ' + table + ' (' + keys.join(',') + ') VALUES (' + keys.map(k => sqlValue(row[k])).join(',') + ') ON CONFLICT DO NOTHING;\n';
@@ -98,6 +100,7 @@ export function createApp(db) {
     res.set('X-Content-Type-Options','nosniff');
     res.set('Referrer-Policy','same-origin');
     res.set('X-Frame-Options','DENY');
+    res.set('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
     if (req.path.startsWith('/api')) res.set('Cache-Control','no-store');
     if (['POST','PATCH','DELETE','PUT'].includes(req.method)) {
       const origin = req.headers.origin;
@@ -105,13 +108,14 @@ export function createApp(db) {
     }
     next();
   });
+  registerNotificationJobRoute(app,db);
   app.use(express.json({limit:'3mb'}));
   app.use((req,_res,next) => { req.body ??= {}; next(); });
   const api = express.Router();
   app.use('/api',api);
   const cookieOptions = {httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV === 'production',path:'/',maxAge:12*3600000};
   api.get('/health',(_req,res) => res.json({ok:true}));
-  api.get('/config',(_req,res) => res.json({demo:db.demo,quickDemo:db.demo && db.kind === 'PostgreSQL local (PGlite)'}));
+  api.get('/config',(_req,res) => res.json({push_configuravel:true,notificacoes:true,demo:db.demo,quickDemo:db.demo && db.kind === 'PostgreSQL local (PGlite)'}));
   const attempts = new Map();
   api.post('/auth/login', async (req,res) => {
     const key = req.ip;
@@ -151,16 +155,15 @@ export function createApp(db) {
   api.get('/bootstrap',async (req,res) => {
     if(req.user.role==='cliente'){res.json({user:req.user,portal:true});return;}
     const params = scopeParams(req.user);
-    const [zones,people,places,lifts,tickets,history,imports] = await Promise.all([
+    const [zones,people,places,lifts,tickets,history] = await Promise.all([
       db.query(tableQueries.zonas+' ORDER BY id',params),
       db.query('SELECT matricula,nome,role,cargo,regiao,zona_id,foto,ativo FROM pessoas WHERE ($1::boolean OR zona_id=$2) ORDER BY nome',params),
       db.query(tableQueries.locais + ' ORDER BY l.nome',params),
       db.query('SELECT e.*,l.nome AS local_nome,l.zona_id FROM elevadores e JOIN locais l ON l.id=e.local_id WHERE ($1::boolean OR l.zona_id=$2) ORDER BY e.codigo',params),
       db.query('SELECT *,tecnico_matricula AS tecnico FROM vw_chamados_metricas WHERE ($1::boolean OR zona_id=$2) ORDER BY aberto_em DESC,id DESC',params),
-      db.query('SELECT h.*,p.nome AS usuario,p.matricula FROM historico_chamados h JOIN pessoas p ON p.matricula=h.usuario_matricula JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE ($1::boolean OR c.zona_id=$2) ORDER BY h.data,h.id',params),
-      manages(req.user) ? db.query('SELECT * FROM importacoes WHERE usuario_matricula=$1 ORDER BY data DESC LIMIT 50',[req.user.matricula]) : {rows:[]}
+      db.query('SELECT h.*,p.nome AS usuario,p.matricula FROM historico_chamados h JOIN pessoas p ON p.matricula=h.usuario_matricula JOIN vw_chamados_metricas c ON c.id=h.chamado_id WHERE ($1::boolean OR c.zona_id=$2) ORDER BY h.data,h.id',params)
     ]);
-    res.json({user:req.user,zonas:zones.rows,pessoas:people.rows,locais:places.rows,elevadores:lifts.rows,chamados:tickets.rows.map(c => ({...c,historico:history.rows.filter(h => h.chamado_id === c.id)})),importacoes:imports.rows,solicitacoes:manages(req.user)?await internalRequests(db,req.user):[]});
+    res.json({user:req.user,zonas:zones.rows,pessoas:people.rows,locais:places.rows,elevadores:lifts.rows,chamados:tickets.rows.map(c => ({...c,historico:history.rows.filter(h => h.chamado_id === c.id)})),solicitacoes:manages(req.user)?await internalRequests(db,req.user):[]});
   });
   api.post('/chamados',async (req,res) => {
     supervisor(req.user);
@@ -203,6 +206,7 @@ export function createApp(db) {
       if (priority !== c.prioridade) changes.push('Prioridade atualizada');
       if (sla !== c.sla_horas) changes.push('SLA atualizado para ' + sla + 'h');
       await tx.query('INSERT INTO historico_chamados (chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)',[c.id,req.user.matricula,changes.join('; ') || 'Registro revisado']);
+      if(tech!==c.tecnico_matricula)await notifyAssignment(tx,c,req.user,{anterior:c.tecnico_matricula,atual:tech,chave:'responsavel:'+c.id+':'+(c.revisao+1)});
       return {id:c.id,revisao:c.revisao+1};
     });
     res.json(result);
@@ -234,49 +238,6 @@ export function createApp(db) {
     insist(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(foto),400,'Use uma imagem PNG, JPEG ou WebP.');
     await db.query('UPDATE pessoas SET foto=$1 WHERE matricula=$2',[foto,req.user.matricula]);
     res.json({ok:true});
-  });
-  api.post(['/importacoes','/importacoes/validar'],async (req,res) => {
-    supervisor(req.user);
-    insist(Array.isArray(req.body.linhas) && req.body.linhas.length > 0 && req.body.linhas.length <= 500,400,'Importe entre 1 e 500 linhas por arquivo.');
-    const name = text(req.body.nome,'Arquivo',200);
-    const format = oneOf(req.body.formato,['csv','txt','json','xlsx','xls'],'Formato');
-    insist(req.body.confirmar===undefined||typeof req.body.confirmar==='boolean',400,'Informe se é validação ou importação.');
-    const preview=req.path==='/importacoes/validar'||req.body.confirmar===false,rollback=Symbol('preview');
-    const details = [];
-    let imported = 0,duplicates=0;
-    async function insertRow(tx,i){
-        const body = {...req.body.linhas[i]};
-        if (body.elevador_codigo) {
-          const found = await tx.query('SELECT id FROM elevadores WHERE codigo=$1',[String(body.elevador_codigo).toUpperCase()]);
-          body.elevador_id = found.rows[0]?.id;
-        }
-        await insertTicket(tx,body,req.user,true);
-    }
-    function rowError(error,i){
-      if(error.code==='23505')duplicates++;
-      details.push({linha:i+2,erro:error.code==='23505'?'Registro já importado.':error.status?error.message:'Dados inválidos nesta linha.'});
-    }
-    if(preview){
-      try{
-        await db.transaction(async tx=>{
-          for(let i=0;i<req.body.linhas.length;i++){
-            await tx.query('SAVEPOINT import_row');
-            try{await insertRow(tx,i);imported++;}
-            catch(error){await tx.query('ROLLBACK TO SAVEPOINT import_row');rowError(error,i);}
-            await tx.query('RELEASE SAVEPOINT import_row');
-          }
-          throw rollback;
-        });
-      }catch(error){if(error!==rollback)throw error;}
-      res.json({validado:true,validas:imported,importadas:0,erros:details.length,duplicadas:duplicates,detalhes:details});return;
-    }
-    // Each valid row and its audit entry commit together; invalid rows are reported.
-    for(let i=0;i<req.body.linhas.length;i++){
-      try{await db.transaction(tx=>insertRow(tx,i));imported++;}
-      catch(error){rowError(error,i);}
-    }
-    await db.query('INSERT INTO importacoes (usuario_matricula,nome,formato,importadas,erros,detalhes) VALUES ($1,$2,$3,$4,$5,$6)',[req.user.matricula,name,format,imported,details.length,JSON.stringify(details)]);
-    res.json({importadas:imported,erros:details.length,duplicadas:duplicates,detalhes:details});
   });
   api.post('/chamados/:id/sugestao',async (req,res) => {
     const ticket = await getTicket(db,req.params.id,req.user);
@@ -312,12 +273,15 @@ export function createApp(db) {
     insist(query,404,'Tabela não disponível.');
     const {rows} = await db.query('SELECT * FROM (' + query + ') scoped ORDER BY 1 LIMIT 100',scopeParams(req.user));
     const columns = await db.query('SELECT column_name,data_type,is_nullable FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2 ORDER BY ordinal_position',['fieldiq',req.params.table]);
-    res.json({tabela:req.params.table,linhas:rows,colunas:columns.rows.filter(c => c.column_name !== 'senha_hash' && c.column_name !== 'foto')});
+    const visible=rows.length?new Set(Object.keys(rows[0])):null;
+    res.json({tabela:req.params.table,linhas:rows,colunas:columns.rows.filter(c => !['senha_hash','foto','cpf','login'].includes(c.column_name)&&(!visible||visible.has(c.column_name)))});
   });
+  registerPushRoutes(api,db);
+  registerNotificationRoutes(api,db);
   registerUserRoutes(api,db);
+  registerTechnicianRoutes(api,db);
   registerAttachmentRoutes(api,db);
   registerAttendanceRoutes(api,db);
-  registerMigrationRoutes(api,db,insertTicket);
   registerPortalRoutes(api,db,insertTicket);
   api.use((_req,res) => res.status(404).json({error:'Rota não encontrada.'}));
   app.get('/vendor/chart.umd.js',(_req,res) => res.sendFile(path.join(projectRoot,'node_modules/chart.js/dist/chart.umd.js')));

@@ -4,7 +4,7 @@ Aplicação web para registrar problemas em elevadores, organizar técnicos por 
 
 O projeto usa PostgreSQL persistente, API Node.js / Express e interface HTML, CSS e JavaScript. A experiência prioriza celulares, preservando o uso em tablet e computador.
 
-**Versão funcional atual:** [branch codex/banco-e-recorrencias](https://github.com/andradehub/fieldiqv1/tree/codex/banco-e-recorrencias), reunida na [revisão #1](https://github.com/andradehub/fieldiqv1/pull/1). Enquanto essa revisão não for incorporada, a branch `main` não contém todas as funções descritas aqui. Os arquivos e commits da versão funcional já estão no GitHub.
+**Versão funcional atual:** [branch codex/banco-e-recorrencias](https://github.com/andradehub/fieldiqv1/tree/codex/banco-e-recorrencias). Consulte as [alterações em relação à main](https://github.com/andradehub/fieldiqv1/compare/main...codex/banco-e-recorrencias). A main ainda não contém todas as alterações desta etapa. Publicar esta branch não atualiza automaticamente a aplicação hospedada.
 
 ## Sumário
 
@@ -16,8 +16,11 @@ O projeto usa PostgreSQL persistente, API Node.js / Express e interface HTML, CS
 - [Tempos, SLA e indicadores](#tempos-sla-e-indicadores)
 - [Anexos e visualização de imagens](#anexos-e-visualização-de-imagens)
 - [Portal do cliente e triagem](#portal-do-cliente-e-triagem)
-- [Assistente de diagnóstico e recorrência](#assistente-de-diagnóstico-e-recorrência)
-- [Importação e migração de dados](#importação-e-migração-de-dados)
+- [Identificação de recorrências](#identificação-de-recorrências)
+- [Central de notificações](#central-de-notificações)
+- [Revisão dos pedidos e pendências](docs/REVISAO-DE-REQUISITOS.md)
+- [Segurança e privacidade](docs/SEGURANCA-E-PRIVACIDADE.md)
+- [Dados da demonstração e escopo atual](#dados-da-demonstração-e-escopo-atual)
 - [Banco de dados e persistência](#banco-de-dados-e-persistência)
 - [Configuração do ambiente](#configuração-do-ambiente)
 - [Arquitetura, linguagens e arquivos](#arquitetura-linguagens-e-arquivos)
@@ -38,7 +41,7 @@ O projeto usa PostgreSQL persistente, API Node.js / Express e interface HTML, CS
 - Git, para clonar o repositório.
 - Docker é opcional e serve apenas para executar um PostgreSQL convencional separado.
 
-A conexão com a internet é necessária para instalar as dependências. Depois da instalação, interface, ícones, fontes, gráficos e análise local do histórico funcionam sem uma API externa. O leitor de Excel carregado por CDN e a síntese generativa opcional exigem conexão.
+A conexão com a internet é necessária para instalar as dependências. Depois da instalação, interface, ícones, fontes, gráficos e análise local do histórico funcionam sem uma API externa. A identificação de recorrências é local e não usa LLM.
 
 ### Obter a versão funcional
 
@@ -88,12 +91,15 @@ O IP pode mudar ao reconectar a rede; confira o endereço exibido em cada inicia
 | `npm run db:init` | Inicializar/atualizar o esquema e informar a quantidade de chamados. |
 | `npm run db:export` | Exportar dados de domínio para `.fieldiq/exports/fieldiq-dominio.sql`. |
 | `npm run admin:create` | Criar uma conta Administrativo usando variáveis de ambiente. |
+| `npm run push:keys -- --contato=mailto:seu-email` | Criar chaves VAPID privadas locais, sem exibir ou substituir chaves existentes. |
+| `npm run demo:expandir` | Complementar uma base demonstrativa anterior, com servidor encerrado e backup. |
 | `node test/browser-operations.mjs` | Verificar operações e filtros em celular/tablet. |
-| `node test/browser-followups.mjs` | Verificar rascunhos, cargos, imagens, migração, portal e triagem. |
+| `node test/browser-followups.mjs` | Verificar rascunhos, cargos, imagens, portal e triagem. |
+| `node test/browser-review.mjs` | Verificar visual dos cabeçalhos, prioridades, Meus chamados, perfil detalhado e inclusão pela supervisão. |
 | `node test/browser-team.mjs` | Verificar colaboração entre contas, conflito de edição, assumir e liberar. |
-| `node test/browser-import.mjs` | Verificar entrada única, prévia por categoria, fotos, busca, paginação, validação sem gravação, permissões e confirmação em desktop/celular. |
-| `node scripts/generate-demo.mjs` | Regenerar o arquivo fictício completo, com avatares ilustrados. |
-| `node scripts/convert-legacy.mjs ...` | Converter CSVs relacionados para um pacote de migração. |
+| `node test/browser-notifications.mjs` | Verificar central, leitura, rascunhos e troca de conta. |
+| `node test/browser-push.mjs` | Verificar inscrição, service worker e logout, com entrega simulada. |
+| `node test/browser-demo.mjs` | Verificar base ampliada, avatares e consulta por zona. |
 
 Scripts que acessam o PGlite local, como `db:init`, `db:export` e `admin:create`, devem ser usados com o servidor encerrado. A exportação da interface pode ser usada enquanto ele está aberto.
 
@@ -101,7 +107,9 @@ Scripts que acessam o PGlite local, como `db:init`, `db:export` e `admin:create`
 
 Sem `DATABASE_URL`, o modo local cria dados fictícios e persiste as alterações em `.fieldiq/data`.
 
-Na primeira inicialização da base demonstrativa são criadas **10 zonas, 11 contas — 10 colaboradores e 1 cliente —, 5 locais, 6 elevadores e 17 chamados**. As datas dessa base inicial são relativas à sua criação. Inicializações seguintes preservam os dados; migrações atualizam o esquema sem recriar os chamados.
+Na primeira inicialização da base demonstrativa são criadas **10 zonas, 51 contas — 50 colaboradores e 1 cliente —, 25 locais, 46 elevadores e 177 chamados**. Há supervisores, técnicos e estagiários por zona, avatares ilustrados, contatos fictícios, históricos e equipes. As datas são relativas à criação da base. Inicializações seguintes preservam os dados; migrações atualizam o esquema sem recriar chamados.
+
+As 40 contas adicionais usam `demonstracao.1` até `demonstracao.40`, com a senha demonstrativa configurada. Bases existentes não recebem novos chamados automaticamente. O comando explícito `demo:expandir` reconhece a ampliação fictícia anterior para não duplicá-la. Consulte [Dados de demonstração](docs/DADOS-DEMONSTRACAO.md).
 
 | Perfil | Usuário local | Senha local | Escopo inicial |
 | --- | --- | --- | --- |
@@ -120,7 +128,7 @@ As senhas acima pertencem apenas à demonstração local. Em banco remoto demons
 
 A cadeia de localização é **zona → local → elevador → chamado**. Cada técnico e supervisor pertence a uma zona. Capital e Interior são agrupamentos regionais; o limite de consulta operacional é a **zona**, não toda a região.
 
-A API aplica a autorização em cada operação, inclusive nas consultas de anexos, IA e exportação. Esconder um botão na interface não é a única proteção.
+A API aplica a autorização em cada operação, inclusive nas consultas de anexos, recorrências e exportação. Esconder um botão na interface não é a única proteção.
 
 | Operação | Técnico | Supervisor | Administrativo / RH | Cliente |
 | --- | --- | --- | --- | --- |
@@ -134,30 +142,30 @@ A API aplica a autorização em cada operação, inclusive nas consultas de anex
 | Liberar responsabilidade | Somente o responsável principal. | Própria zona. | Todas as zonas. | Não. |
 | Sair da equipe | Própria participação adicional. | Pode remover participantes da zona. | Pode remover participantes de todas as zonas. | Não. |
 | Reabrir, cancelar e reatribuir | Não. | Própria zona. | Todas as zonas. | Não. |
-| Cadastrar locais/elevadores e importar chamados | Não. | Própria zona. | Todas as zonas. | Não. |
-| Cadastrar/editar técnicos | Não. | Própria zona, sem transferir. | Todas as zonas. | Não. |
+| Cadastrar locais e elevadores | Não. | Própria zona. | Todas as zonas. | Não. |
+| Cadastrar/editar técnicos | Não. | Somente consulta de contatos da própria zona, sem CPF ou login. | Todas as zonas. | Não. |
 | Cadastrar/editar supervisores e transferir zonas | Não. | Não. | Sim. | Não. |
 | Cadastrar clientes e vincular locais | Não. | Não. | Sim. | Não há cadastro público autônomo. |
 | Fazer triagem das solicitações | Não. | Própria zona. | Todas as zonas. | Acompanha o retorno. |
 | Consultar banco/exportar domínio | Não. | Própria zona. | Todas as zonas. | Não. |
-| Migrar cadastros e histórico completos | Não. | Não. | Sim. | Não. |
 
 O responsável técnico mantém a possibilidade de revisar descrição e solução de seu chamado resolvido; participantes adicionais deixam de ter edição quando ele é encerrado. Reabrir e cancelar continuam exclusivos da gestão.
 
 ## Funções de cada área
 
-As dez áreas internas são exibidas conforme o perfil. O cliente usa outra interface.
+As áreas internas são exibidas conforme o perfil. O perfil detalhado é aberto pela Equipe de campo. O cliente usa outra interface.
 
 | Área | Funções implementadas |
 | --- | --- |
 | **Visão geral** | Pendências, SLA cumprido, tempo médio e taxa de resolução; períodos de 7, 30 e 90 dias ou todo o histórico; evolução semanal; distribuição por status e zona; fila de atenção; carga da equipe; atalhos para chamados críticos, vencidos e sem responsável. |
 | **Chamados** | Busca por número, título, descrição, equipamento e local; filtros de status, prioridade e classificação; recortes por técnico/participação, equipamento e prazo; paginação; cartões no celular; detalhes com abas Visão geral, Atendimento, Anexos e Histórico. |
+| **Meus chamados** | Técnico: responsabilidade ou participação. Supervisor: chamados da zona supervisionada. Busca, filtros, ordenação nos dois sentidos e paginação. |
+| **Perfil do técnico** | Equipe de campo → Ver perfil: indicadores, chamados associados, trabalho registrado, busca, situação, paginação e acesso a detalhes/histórico/anexos autorizados. |
 | **Novo chamado** | Cadastro em três etapas: identificação, detalhes e revisão; seleção do elevador, título, descrição, classificação, prioridade, prazo e técnico da zona do equipamento. |
 | **Elevadores e locais** | Consulta, busca e filtros; cadastro de local e equipamento; código, fabricante, modelo, série e capacidade; vínculo do elevador ao local; acesso ao histórico de chamados do equipamento. |
 | **Equipe de campo** | Colaboradores, cargos, zona, foto e situação; pendências, resolução e tempo médio individual; consulta dos chamados em que a pessoa é responsável ou participante. |
-| **Gestão de usuários** | Cadastro e edição, cargos por perfil, contatos, admissão, acesso, ativação/desativação, zonas e vínculos de cliente; rascunhos de formulário na sessão. |
+| **Gestão de usuários** | Administrativo: cadastro/edição, cargos por perfil, contatos, admissão, acesso, situação, zonas e vínculos de cliente; rascunhos na sessão. Supervisor: consulta somente leitura dos contatos dos técnicos da sua zona, sem CPF ou login. Ordenação por coluna, com ativos primeiro por padrão. |
 | **Solicitações de clientes** | Caixa de entrada da área autorizada; relato, equipamento, cliente, abertura e lembretes; aceite com atribuição/prazo/prioridade ou retorno justificado; acesso ao chamado gerado. |
-| **Importar dados** | Entrada única para chamados e bases completas, com identificação automática; resumo por categoria, fotos, busca e paginação dos registros; validação sem gravação, relatório de duplicados/erros e confirmação; exemplos para download e histórico de arquivos de chamados. |
 | **Banco de dados** | Catálogo permitido, quantidades, consulta de até 100 registros por tabela, busca nos registros exibidos, estrutura de colunas, esquema SQL, versão do banco e exportação de domínio. |
 | **Meu perfil** | Informações profissionais, cargo, matrícula, zona e resumo de atuação; alteração de foto em PNG, JPEG ou WebP, de até 1,4 MB na interface. |
 
@@ -181,6 +189,10 @@ Cliques fora do cadastro e gestos de seleção de texto não fecham o diálogo. 
 
 ## Fluxo dos chamados e atendimento em equipe
 
+Na Visão geral do chamado, supervisor/Administrativo pode selecionar um técnico ativo da zona mesmo quando ainda não existe responsável. O primeiro técnico se torna responsável principal; depois, a ação Adicionar à equipe inclui participantes sem trocar o responsável. Funciona em Aberto/Em andamento, registra autoria e horário no histórico e preserva abertura/SLA. Incluir alguém não inicia trabalho automaticamente.
+
+Cabeçalhos de tabelas alternam ordenação crescente/decrescente; no celular/tablet, as tabelas em cartões têm seletores próprios. Chamados são ordenados antes da paginação.
+
 ### Estados e classificação
 
 | Estado | Significado |
@@ -190,7 +202,7 @@ Cliques fora do cadastro e gestos de seleção de texto não fecham o diálogo. 
 | `resolvido` | Encerrado com solução e data de resolução. |
 | `cancelado` | Cancelado pela gestão; não entra na taxa de resolução. |
 
-Prioridades: `baixa`, `media`, `alta` e `critica`. Classificações registradas: `obra_nova`, `mod_integral` e `mod_parcial`. O prazo de resolução é informado em horas, de 1 a 8.760.
+Prioridades: **A · Crítica**, **B · Média**, **C · Leve**. A migração 006 converte `critica`/`alta` em A, `media` em B e `baixa` em C, preservando chamados, datas e SLA. Classificações registradas: `obra_nova`, `mod_integral` e `mod_parcial`. O prazo de resolução é informado em horas, de 1 a 8.760.
 
 ### Ações
 
@@ -257,7 +269,7 @@ A aba Anexos permite registrar evidências do atendimento.
 
 O servidor verifica tamanho, extensão, assinatura/formato admitido e duplicidade. Inclusão e exclusão entram no histórico. Essa validação de formato não constitui um serviço de antivírus.
 
-O cliente não acessa anexos internos. A IA atual não lê fotos ou documentos automaticamente.
+O cliente não acessa anexos internos. A identificação de recorrências usa textos de chamados; não lê fotos ou documentos automaticamente.
 
 ## Portal do cliente e triagem
 
@@ -284,124 +296,37 @@ Estados da solicitação: `aguardando_triagem`, `aceita` e `recusada`. O cliente
 
 Enquanto aguarda triagem, o cliente pode usar **Lembrar a empresa**, com intervalo mínimo de uma hora por solicitação. O sistema registra o lembrete e exibe quantidade e último horário na fila interna. Depois da triagem, a ação deixa de estar disponível.
 
-Os lembretes são internos: não há envio de e-mail, WhatsApp, SMS ou push nessa versão.
+Os lembretes do cliente são registrados internamente. A gestão pode recebê-los também por Web Push quando configurado e autorizado no dispositivo; não há envio de e-mail, WhatsApp ou SMS.
 
-## Assistente de diagnóstico e recorrência
+## Identificação de recorrências
 
-O assistente consulta o histórico para facilitar a investigação de sintomas recorrentes. O exemplo inicial é o chamado **#5**, do elevador **BAR-001**, com quatro ocorrências anteriores semelhantes.
-
-### Análise local
+O recurso consulta chamados anteriores da zona autorizada para direcionar a investigação de sintomas recorrentes. O exemplo inicial é o chamado **#5**, do elevador **BAR-001**, com quatro ocorrências anteriores semelhantes.
 
 1. Recupera registros anteriores à abertura do chamado, dentro da zona autorizada.
 2. Normaliza os textos e usa TF-IDF, similaridade de cosseno e termos de componentes.
 3. Prioriza o mesmo elevador, distinguindo casos de outros equipamentos.
-4. Mostra recorrências, intervalo médio entre registros, hipóteses, soluções anteriores e referências aos chamados usados.
+4. Exibe recorrências, intervalo médio, soluções anteriores e referências aos chamados utilizados.
 5. Persiste a sugestão e recebe avaliação de utilidade de usuários autorizados.
 
-Sem histórico suficiente, informa a insuficiência de evidências. Similaridade textual não é probabilidade de diagnóstico; frequência de uma solução não comprova eficácia. O intervalo entre registros não prevê a próxima falha.
+A indicação é apenas um direcionamento: o técnico deve avaliar o equipamento e as outras causas possíveis. Similaridade não confirma diagnóstico; repetição de uma solução não comprova eficácia ou redução de custos. Sem histórico suficiente, o sistema informa essa limitação.
 
-### Síntese generativa opcional
+A versão atual funciona **sem LLM, chave externa ou envio de textos a um provedor generativo**. O complemento opcional anterior foi removido. Variáveis antigas de provedor não o reativam. Nomes históricos como `sugestoes_ia` e `avaliacoes_ia` permanecem para preservar os registros existentes. Implementação: [server/ai.mjs](server/ai.mjs).
 
-A análise local funciona sem chave. Para habilitar o complemento generativo, configure **as duas variáveis** no servidor:
+## Central de notificações
 
-```dotenv
-OPENAI_API_KEY=sua-chave-no-ambiente-do-servidor
-OPENAI_MODEL=gpt-5-mini
-```
+Sino no topo e nos detalhes do chamado, painel lateral no computador e tela completa no celular. Contador de não lidas, histórico persistente, filtros, paginação e leitura individual/coletiva. Avisos breves pessoais/críticos são silenciosos. A central preserva o atendimento aberto e isola destinatário, perfil e zona.
 
-O nome acima é o exemplo de configuração do projeto, não uma exigência de usar esse modelo em qualquer implantação. A integração usa Responses API, saída estruturada, `store: false`, tempo limite e validação dos IDs de evidência. Em indisponibilidade ou resposta inválida, identifica a volta à análise local.
+Atribuição, equipe, liberação, solicitações e lembretes dos clientes geram notificações na transação da ação. Assumir gera confirmação imediata; o servidor local avalia SLA a cada minuto, com avisos em 75% e no vencimento, sem repetir por destinatário/prazo/etapa. Agendamento externo exige configuração própria pela rota protegida. Consulte [Notificações](docs/NOTIFICACOES.md).
 
-A chave não vai ao navegador. São enviados sintomas e evidências textuais recuperadas; campos de autenticação não são enviados, mas textos livres podem conter dados que os usuários tenham digitado. O acesso ao GitHub ou a este ambiente de desenvolvimento não fornece uma chave de API à aplicação.
+Web Push implementado em **Meu perfil → Notificações no celular**, com ativação explícita, mensagem genérica e silenciosa, fila persistente, retentativas e revogação. Não exibe cliente, endereço ou descrição na tela bloqueada. Precisa de HTTPS, chaves VAPID do servidor, rotina de envio e permissão do navegador; no iPhone/iPad, instalação na tela inicial em versão compatível. HTTP por IP da rede local oferece a central, mas não ativa push móvel. [Configuração e limites do push](docs/PUSH-E-PUBLICACAO.md).
 
-Os testes do provedor usam respostas simuladas; nenhuma chamada paga foi necessária para as verificações entregues. Implementação: [server/ai.mjs](server/ai.mjs).
+## Dados da demonstração e escopo atual
 
-## Importação e migração de dados
+A versão final do TCC não oferece importação de chamados nem migração de bases externas. O menu, as rotas, o leitor CSV/Excel/JSON, o conversor e os exemplos de upload foram retirados. Os cadastros são feitos nas telas; o histórico cresce com os atendimentos. A demonstração usa [seed.mjs](server/seed.mjs) e [demo-extra.mjs](server/demo-extra.mjs), na primeira inicialização de uma base demonstrativa vazia.
 
-### Uma única entrada e revisão do conteúdo
+Esta alteração não apaga nem recria a base existente. Pessoas, fotos, zonas, locais, elevadores, chamados, participações e históricos já gravados continuam disponíveis conforme as permissões normais. A exportação de domínio na área Banco de dados é uma consulta de saída e continua disponível; não oferece restauração ou importação pela aplicação.
 
-Em **Importar dados**, use o mesmo campo para selecionar ou arrastar qualquer arquivo aceito. A tela identifica chamados ou uma base completa e apresenta a revisão no próprio painel, sem um segundo formulário de migração.
-
-1. **Selecionar arquivo:** CSV/TXT, Excel ou JSON de até 2 MB. Há uma seção recolhível para baixar os exemplos, inclusive a base fictícia com fotos para o Administrativo.
-2. **Conferir e validar:** o resumo mostra as categorias incluídas e suas quantidades. Expanda zonas, pessoas e fotos, locais, elevadores, chamados, histórico, equipes e períodos. Cada categoria tem busca sem distinção de acentos e paginação de cinco registros. São exibidos os campos recebidos, com referências identificadas por nome/código e miniaturas de fotos incorporadas válidas. A prévia não busca fotos em URLs externas.
-3. **Confirmar importação:** clique em **Validar arquivo** para conferir novos registros, cadastros reutilizados, duplicados e erros antes de habilitar **Confirmar importação**. Selecionar e validar não grava registros de domínio nem histórico de importação. A confirmação revalida os dados; mudanças concorrentes podem alterar o resultado final.
-
-Um supervisor pode revisar/importar apenas chamados do próprio escopo. Bases completas exigem Administrativo / RH; reconhecer o formato não amplia permissões. Remover o arquivo limpa a prévia. Durante uma requisição de importação, aguarde o término antes de remover ou trocar o arquivo.
-
-### Importar chamados
-
-Disponível à gestão no próprio escopo. Aceita CSV/TXT, JSON e Excel, com **até 2 MB e 500 linhas por arquivo**.
-
-- Prévia de todos os registros por busca e paginação antes do envio.
-- Validação por linha, relatório de erros e identificação de duplicados.
-- Linhas válidas são gravadas com seu histórico; linhas inválidas são relatadas.
-- Resultado e histórico de importações ficam disponíveis na tela.
-- CSV reconhece vírgula, ponto e vírgula, tabulação e barra vertical, respeitando campos entre aspas.
-- Excel usa a biblioteca carregada por CDN; sem ela, use CSV ou JSON.
-- Um JSON de chamados pode ser uma lista de objetos ou um único chamado. Objetos sem campos reconhecidos são rejeitados antes de mostrar uma prévia vazia.
-- Ao selecionar um pacote `fieldiq-legado-v1`, o Administrativo vê a prévia completa no mesmo painel. O supervisor recebe uma orientação para usar o perfil Administrativo / RH, sem enviar o pacote como um chamado.
-- A validação de chamados simula a gravação em uma transação com pontos de recuperação por linha e a reverte ao final. Assim detecta duplicados no banco e dentro do arquivo, sem gravar chamados, histórico ou arquivo importado. Sequências PostgreSQL podem consumir números durante essa simulação.
-- Se houver linhas válidas e inválidas, a tela informa quais serão ignoradas. A confirmação importa somente as válidas. Sem linhas válidas, não habilita a confirmação.
-
-| Campo | Regra |
-| --- | --- |
-| `titulo` | Obrigatório. |
-| `elevador_codigo` | Obrigatório na importação da interface; equipamento já cadastrado e autorizado. |
-| `descricao` | Detalhes do problema. |
-| `tecnico` | Matrícula de técnico da zona do equipamento, quando informado. |
-| `status` | Aberto, Em andamento, Resolvido ou Cancelado nos códigos indicados anteriormente. |
-| `aberto_em` | Informe para preservar a data histórica; use ISO 8601 com fuso. |
-| `solucao` e `resolvido_em` | Obrigatórios quando o status for Resolvido. |
-| `tipo_obra`, `prioridade`, `sla_horas` | Valores admitidos pela aplicação. |
-
-Datas de resolução não podem anteceder a abertura nem estar no futuro. Exemplo de data: `2026-11-01T10:00:00-03:00`.
-
-O [exemplo CSV](fieldiqarchives/public/exemplo-importacao.csv) pode ser baixado na interface.
-
-### Migrar cadastros e histórico completos
-
-Exclusivo do Administrativo. Aceita um JSON no modelo `fieldiq-legado-v1`, com **até 2 MB e 1.000 registros no total**.
-
-| Lista | Conteúdo |
-| --- | --- |
-| `zonas` | Código, região, nome e local da zona. |
-| `pessoas` | Técnicos e supervisores, cargos, contatos, CPF, admissão e foto opcional. |
-| `locais` | Locais e vínculos às zonas da origem. |
-| `elevadores` | Equipamentos e referências aos locais. |
-| `chamados` | Histórico individual, responsáveis, sintomas, soluções, datas e prazos. |
-| `historicos` | Alterações anteriores com autoria e horário. |
-| `equipes` | Participações adicionais por chamado. |
-| `atendimentos` | Períodos históricos encerrados, com início, fim e técnico. |
-
-Cada registro possui um ID da origem. As referências são traduzidas para os IDs locais. O fluxo **Conferir conteúdo → Validar arquivo → Confirmar importação** revalida os dados e grava o pacote inteiro em uma transação.
-
-- A validação reverte os registros ao final; sequências PostgreSQL podem consumir números sem criar chamados.
-- Um erro impede a gravação do pacote completo e informa entidade/posição.
-- Reenviar o mesmo pacote não duplica registros.
-- Reutilizar um ID da mesma origem com conteúdo diferente gera conflito, sem sobrescrita silenciosa.
-- Contas migradas ficam inativas e não recebem senhas antigas. O Administrativo define uma senha nova e ativa o acesso.
-- Foto de perfil: PNG, JPEG ou WebP em base64, com até 96 KB no pacote.
-- Períodos precisam estar dentro do intervalo do chamado; sobreposições do mesmo técnico são rejeitadas.
-- Informar apenas o primeiro início não faz o sistema inventar períodos ou tempo trabalhado.
-- Clientes, solicitações do portal e anexos binários dos chamados não fazem parte desse pacote.
-
-Arquivos para baixar:
-
-- [Exemplo mínimo de migração](fieldiqarchives/public/exemplo-migracao.json).
-- [Base fictícia completa](fieldiqarchives/public/demonstracao-fieldiq.json).
-
-A base completa tem **10 zonas, 40 colaboradores, 20 locais, 40 elevadores, 160 chamados, 280 registros de histórico, 40 participações adicionais e 160 períodos de trabalho**. Inclui dados sintéticos e **avatares ilustrados gerados localmente**, não retratos de pessoas reais. Ela reutiliza as zonas iniciais e usa identificadores próprios para coexistir com a base demonstrativa. Não é importada automaticamente.
-
-Para usar `demonstracao-fieldiq.json`, entre como **Administrativo / RH**, abra **Importar dados** e selecione o arquivo no campo único. Confira as quantidades e expanda as categorias para revisar nomes, fotos e dados dos registros. Clique em **Validar arquivo** e depois em **Confirmar importação**. Apenas selecionar ou validar não grava a base. Se o arquivo aparecer como “1 registro” sem título/elevador, recarregue a página para obter a versão atual. Contas importadas permanecem inativas até definição de senha e ativação pela gestão.
-
-Para converter CSVs relacionados:
-
-```powershell
-node scripts/convert-legacy.mjs 'D:\dados-legado' 'Empresa demonstrativa — sistema anterior' 'D:\dados-legado\pacote-fieldiq.json' 'D:\dados-legado\mapeamento.json'
-```
-
-O mapeamento é opcional quando as colunas já seguem o modelo. O conversor lê `zonas.csv`, `pessoas.csv`, `locais.csv`, `elevadores.csv`, `chamados.csv`, `historicos.csv`, `equipes.csv` e `atendimentos.csv`. O guia traz o formato de mapeamento de colunas, valores e padrões: [MIGRACAO-E-SISTEMAS-DO-SETOR.md](docs/MIGRACAO-E-SISTEMAS-DO-SETOR.md).
-
-A pesquisa documenta exemplos reais de sistemas do setor, sem afirmar que um SGBD específico predomine. Não há conector direto com fornecedores, execução de SQL por upload ou restauração de BAK/FDB.
+A importação poderá ser reconsiderada como trabalho futuro, com análise da origem, mapeamento e transformação de campos, conferência de vínculos e tratamento de erros. Não há promessa de compatibilidade automática com bancos de terceiros. O motivo é concentrar a entrega atual na gestão de atendimentos, indicadores e identificação de recorrências, com um escopo que possa ser demonstrado e explicado. A pesquisa documental anterior está em [Sistemas do setor e evolução futura](docs/MIGRACAO-E-SISTEMAS-DO-SETOR.md).
 
 ## Banco de dados e persistência
 
@@ -438,10 +363,12 @@ Encerre o servidor, execute `npm run db:init` e inicie novamente. O serviço sep
 | Organização e patrimônio | `zonas`, `pessoas`, `locais`, `elevadores`. |
 | Operação | `chamados`, `historico_chamados`, `equipe_chamado`, `atendimentos`. |
 | Evidências | `anexos_chamados`. |
-| IA | `sugestoes_ia`, `avaliacoes_ia`. |
-| Importação/migração | `importacoes`, `migracoes_legado`, `referencias_legado`. |
+| Recorrências | `sugestoes_ia`, `avaliacoes_ia` — nomes históricos preservados. |
+| Estruturas históricas sem função ativa | `importacoes`, `migracoes_legado`, `referencias_legado`: mantidas apenas por compatibilidade, fora do catálogo operacional. |
 | Identidade/auditoria | `sessoes`, `auditoria_usuarios`. |
 | Cliente | `cliente_locais`, `solicitacoes_clientes`, `lembretes_solicitacoes`. |
+| Notificações | `notificacoes`, `inscricoes_push`, `entregas_push`; histórico individual e fila privada de entrega. |
+| Demonstração | `inicializacoes_demo`, controle para não repetir a ampliação fictícia. |
 | Controle de esquema | `schema_migrations`, criada pelo inicializador. |
 
 As views `vw_chamados_metricas_base` e `vw_chamados_metricas` agregam identificação, SLA, tempos, anexos e participações. Chaves estrangeiras e restrições garantem vínculos e coerência de dados, incluindo solução/data para encerramento.
@@ -455,6 +382,10 @@ As views `vw_chamados_metricas_base` e `vw_chamados_metricas` agregam identifica
 | [003-equipes.sql](database/003-equipes.sql) | Participantes e períodos simultâneos por técnico. |
 | [004-clientes.sql](database/004-clientes.sql) | Perfil Cliente, vínculos, solicitações e lembretes. |
 | [005-responsabilidade.sql](database/005-responsabilidade.sql) | Corrigir chamados Em andamento sem responsável, preservando histórico e prazos. |
+| [006-prioridades-abc.sql](database/006-prioridades-abc.sql) | Converter prioridades para A/B/C sem reiniciar SLA, períodos ou datas. |
+| [007-notificacoes.sql](database/007-notificacoes.sql) | Histórico individual, leitura e deduplicação de notificações. |
+| [008-push.sql](database/008-push.sql) | Inscrições por usuário/dispositivo e fila de entrega Web Push. |
+| [009-demonstracao.sql](database/009-demonstracao.sql) | Inicialização idempotente da base fictícia ampliada. |
 
 O inicializador aplica cada migração pendente uma vez, em transação. Alterações posteriores de esquema devem receber arquivo novo e entrada na lista do inicializador.
 
@@ -481,13 +412,14 @@ Copie [`.env.example`](.env.example) para `.env` quando precisar personalizar o 
 | `DEMO_MODE` | Em banco remoto, `1` habilita os dados fictícios. Sem URL, o modo local é demonstrativo por padrão. |
 | `DEMO_PASSWORD` | Senha das contas criadas na base demonstrativa remota; obrigatória para esse preenchimento. |
 | `PGSSLMODE` | Configuração TLS do adaptador PostgreSQL; use o modo e certificados exigidos pelo provedor. |
-| `OPENAI_API_KEY` | Chave do complemento generativo opcional. |
-| `OPENAI_MODEL` | Identificador do modelo usado no complemento. |
 | `APP_ORIGIN` | Origem adicional explicitamente admitida pela verificação de origem das operações de escrita. |
 | `NODE_ENV` | Em produção, ativa cookie seguro e configuração de proxy do servidor. |
 | `ADMIN_LOGIN`, `ADMIN_NAME` | Login e nome para `admin:create`. |
 | `ADMIN_PASSWORD` | Senha de 12 a 200 caracteres para `admin:create`. |
 | `ADMIN_REGISTRATION` | Matrícula opcional do Administrativo; padrão `ADM-001`. |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Par de chaves Web Push do servidor; apenas a pública chega ao navegador. |
+| `VAPID_SUBJECT` | Contato responsável pelo serviço em formato `mailto:` ou URL HTTPS. |
+| `CRON_SECRET` | Segredo aleatório de pelo menos 32 caracteres para a rotina externa de SLA/envio. |
 
 Para criar o primeiro Administrativo em uma base sem demonstração, configure `DATABASE_URL`, `DEMO_MODE=0` e as variáveis `ADMIN_*` no ambiente privado, e execute:
 
@@ -495,7 +427,7 @@ Para criar o primeiro Administrativo em uma base sem demonstração, configure `
 npm run admin:create
 ```
 
-Depois, remova `ADMIN_PASSWORD` do ambiente. Zonas e locais precisam existir antes dos vínculos de colaboradores e clientes; podem ser cadastrados conforme os fluxos disponíveis ou trazidos pelo pacote de migração.
+Depois, remova `ADMIN_PASSWORD` do ambiente. Zonas e locais precisam existir antes dos vínculos de colaboradores e clientes; são cadastrados pelos fluxos disponíveis na aplicação.
 
 Não publique `.env`, chaves de API, senhas reais ou URLs de conexão com credenciais.
 
@@ -511,22 +443,21 @@ flowchart LR
   API --> DB[(PostgreSQL)]
   API --> R[Recuperação de casos por equipamento e texto]
   DB --> R
-  R -. complemento opcional .-> G[API de modelo generativo]
 ```
 
 ### Linguagens, formatos e bibliotecas
 
 | Tecnologia | Onde é utilizada |
 | --- | --- |
-| JavaScript, módulos `.js`/`.mjs` | Interface, portal, API, autenticação, IA, persistência, scripts e testes. |
+| JavaScript, módulos `.js`/`.mjs` | Interface, portal, API, autenticação, recorrências, persistência, scripts e testes. |
 | HTML | `index.html` e `cliente.html`, com composição dinâmica das telas. |
 | CSS | Cores, tipografia, componentes, layouts, formulários, celular/tablet e portal. |
 | SQL / PostgreSQL | Tabelas, relacionamentos, índices, restrições, views, migrações e consultas parametrizadas. |
 | Batch `.cmd` | Inicializador para Windows. |
-| JSON | Dependências, configuração Vercel, pacotes de importação, dados fictícios e comunicação da API. |
+| JSON | Dependências, configuração Vercel, dados fictícios e comunicação da API. |
 | YAML | Docker Compose. |
 | Markdown e Mermaid | Documentação, tabelas e diagrama de arquitetura. |
-| CSV/TXT | Intercâmbio de dados e arquivos de exemplo; não são linguagens de programação. |
+| CSV/TXT | Podem acompanhar chamados como anexos; não há leitura para importar cadastros e não são linguagens de programação. |
 | PowerShell | Exemplos de execução para Windows na documentação. |
 
 Bibliotecas principais: Express, PGlite, `pg`, Chart.js, Lucide e Inter local. Verificação de interface: Playwright e axe. As versões instaláveis estão em [package.json](package.json) e [package-lock.json](package-lock.json). Licenças e avisos estão em [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
@@ -537,17 +468,16 @@ Bibliotecas principais: Express, PGlite, `pg`, Chart.js, Lucide e Inter local. V
 fieldiqv1/
 ├── server/                     API, autenticação, banco e regras de domínio
 ├── api/index.mjs                Entrada para execução serverless
-├── database/                   Migrações SQL 001 a 005
+├── database/                   Migrações SQL 001 a 009
 ├── fieldiqarchives/public/
 │   ├── index.html              Área interna
 │   ├── cliente.html            Portal do cliente
-│   ├── assets/js/core/         Estado, API, formatação, importação e catálogo de cargos
+│   ├── assets/js/core/         Estado, API, formatação e catálogo de cargos
 │   ├── assets/js/components/   Componentes de interface
 │   ├── assets/js/views/        Telas internas
 │   ├── assets/js/client-app.js Portal
 │   ├── assets/css/             Estilos compartilhados e por área
-│   └── *.csv / *.json          Exemplos e base fictícia
-├── scripts/                    Build, banco, Administrativo, conversão e demonstração
+├── scripts/                    Build, banco, Administrativo, chaves push e demonstração
 ├── test/                       Testes de regras, API e navegadores
 ├── docs/                       Pesquisas e detalhamento funcional
 ├── compose.yaml                PostgreSQL separado opcional
@@ -589,13 +519,14 @@ Todas as rotas abaixo usam o prefixo `/api`. A sessão é um cookie `fieldiq_ses
 | `POST /locais` | Cadastrar local no escopo da gestão. |
 | `POST /elevadores` | Cadastrar equipamento vinculado a local autorizado. |
 | `PATCH /perfil` | Alterar a foto da própria conta interna. |
-| `GET /usuarios` | Listar usuários administráveis, com CPF mascarado. |
-| `POST /usuarios` | Cadastrar usuário segundo as permissões. |
-| `PATCH /usuarios/:matricula` | Editar cadastro, acesso, zona ou vínculos admitidos. |
+| `GET /usuarios` | Administrativo: cadastros com CPF mascarado. Supervisor: apenas contatos de técnicos da própria zona, sem CPF ou login. |
+| `POST /usuarios` | Administrativo cadastra usuário. Supervisor/técnico recebem 403. |
+| `PATCH /usuarios/:matricula` | Exclusivo do Administrativo: cadastro, acesso, zona, situação ou vínculos admitidos. |
+| `GET /tecnicos/:matricula` | Perfil detalhado e chamados associados, limitado à zona; técnico consulta apenas o próprio perfil. |
 
 A rota antiga `POST /equipe` não deve ser usada para transferências. Ela bloqueia supervisores e, para Administrativo, responde com orientação de usar Gestão de usuários.
 
-### Arquivos, IA, importação e banco
+### Arquivos, análise de recorrências e banco
 
 | Método e rota | Função |
 | --- | --- |
@@ -605,10 +536,16 @@ A rota antiga `POST /equipe` não deve ser usada para transferências. Ela bloqu
 | `DELETE /anexos/:id` | Excluir anexo permitido, com histórico. |
 | `POST /chamados/:id/sugestao` | Recuperar evidências e gerar análise de recorrência. |
 | `POST /sugestoes/:id/avaliacao` | Registrar `util: true` ou `false`. |
-| `POST /importacoes` | Receber linhas de chamados: `confirmar: false` valida sem gravar; `true` importa e registra o resultado. Resposta informa duplicados e erros. Clientes antigos que omitem `confirmar` mantêm o envio direto. |
-| `POST /importacoes/validar` | Rota usada pela nova tela para validar chamados. Nunca confirma a gravação, mesmo se receber `confirmar: true`; servidor antigo responde rota inexistente em vez de importar silenciosamente. |
-| `GET /migracoes` | Histórico das migrações completas, para Administrativo. |
-| `POST /migracoes` | Receber `pacote` e `confirmar: false` para prévia ou `true` para gravação. |
+| `GET /notificacoes` | Histórico e contador do próprio usuário; status, pagina e limite. |
+| `GET /notificacoes/:id` | Consultar a própria notificação ao abrir um aviso push. |
+| `PATCH /notificacoes/:id` | Alternar leitura individual. |
+| `PATCH /notificacoes/lidas` | Marcar como lidas até o último ID consultado. |
+| `GET /tarefas/notificacoes` | Agendador com CRON_SECRET; não aceita sessão comum. |
+| `GET /push/config` | Disponibilidade, chave pública e contagem de dispositivos da própria conta. |
+| `POST /push/estado` | Conferir vínculo da própria inscrição. |
+| `POST /push/inscricoes` | Vincular inscrição válida à própria conta. |
+| `DELETE /push/inscricoes` | Revogar a própria inscrição. |
+| `POST /push/teste` | Enfileirar teste individual; intervalo mínimo de um minuto. |
 | `GET /banco` | Catálogo e informações do banco. |
 | `GET /banco/:table` | Consultar tabela permitida no escopo. |
 | `GET /banco/export` | Exportar SQL de domínio. |
@@ -637,7 +574,7 @@ npm test
 npm run build
 ```
 
-A última verificação funcional registrada passou em **40 arquivos JavaScript e 37 testes automatizados**, além do build. Os testes cobrem autenticação, autorização por zona/perfil, cargos, clientes, equipes, desatribuição, anexos, SLA, métricas, reconhecimento de arquivos, categorias/referências/fotos da prévia, busca e paginação, validação sem gravação, importação, migração, conversor CSV, exportação e persistência/atualização de banco.
+A revisão atual inclui **53 arquivos JavaScript e 47 testes automatizados**, além do build. Cobrem autenticação, autorização, operação, métricas, persistência, retirada da importação, notificações, push e demonstração ampliada. O transporte push é cifrado pela biblioteca real e inspecionado com rede simulada; não comprova entrega física em celular.
 
 ### Interface
 
@@ -652,15 +589,16 @@ npm run test:browser
 node test/browser-operations.mjs
 node test/browser-followups.mjs
 node test/browser-team.mjs
+node test/browser-review.mjs
+node test/browser-notifications.mjs
+node test/browser-push.mjs
+node test/browser-demo.mjs
 ```
 
-O script de geração de avatares também usa o Edge por meio do Playwright; não é uma dependência do servidor em execução.
+Cobertura registrada: dez áreas internas e perfil detalhado em larguras de 320, 375, 390, 430, 768, 834, 1024 e 1440 px; WebKit em dimensões de iPhone; fluxos de cadastro, rascunho, cargos, visualização/zoom, cliente/triagem, colaboração entre contas e assumir/liberar.
 
-Cobertura registrada: dez telas internas em larguras de 320, 375, 390, 430, 768, 834, 1024 e 1440 px; WebKit em dimensões de iPhone; fluxos de cadastro, rascunho, cargos, visualização/zoom, migração completa, cliente/triagem, colaboração entre contas e assumir/liberar.
+Nesta revisão passaram 14 verificações axe gerais, 18 de cadastro/imagens/portal, 16 operacionais, 29 de tabelas/equipes, 5 da central, 2 de push e 2 da demonstração, sem violações nos cenários avaliados. Isso não substitui uso em aparelho físico nem certificação integral de acessibilidade. Resultados históricos permanecem no CHANGELOG.
 
-Foram concluídas **17 verificações axe gerais, 20 operacionais e 21 dos novos fluxos**, sem violações detectadas nos cenários avaliados. Isso não substitui uso em aparelho físico nem certificação integral de acessibilidade.
-
-A correção de reconhecimento da base fictícia acrescentou **9 verificações axe** no Edge/WebKit, em 320, 390 e 1440 px: entrada comum, prévia completa e orientação por perfil. O teste importa os 160 chamados somente em banco isolado, confirma que selecionar/validar não grava, verifica reenvio sem duplicação e mantém a importação de chamados para supervisores.
 
 Capturas e relatórios são gerados em `test-results/redesign`, `test-results/operations` e `test-results/followups`, fora do Git. A interface móvel usa cartões, cinco chamados por página, navegação inferior, filtros completos em grade e abas reorganizadas. No computador, são dez chamados por página.
 
@@ -673,7 +611,7 @@ A configuração da Vercel está versionada, mas **a implantação em nuvem e o 
 3. Configure `DATABASE_URL` de um PostgreSQL persistente acessível ao servidor, com TLS/certificados válidos e conexão recomendada pelo provedor.
 4. Não use o disco efêmero de uma função serverless como armazenamento PGlite.
 5. Para demonstração, configure `DEMO_MODE=1` e uma `DEMO_PASSWORD` própria. Para base sem preenchimento fictício, use `DEMO_MODE=0` e provisione o primeiro Administrativo no mesmo banco.
-6. Configure as variáveis opcionais de IA somente se for habilitar o provedor externo.
+6. Confira permissões e dados de demonstração antes de usar o ambiente publicado.
 7. Depois de publicar, valide login, isolamento de clientes/zonas, triagem, trabalho em equipe, anexos, encerramento e persistência.
 
 A API serverless usa [api/index.mjs](api/index.mjs). Não coloque credenciais em HTML, no repositório ou na saída de build. A publicação do código no GitHub não representa, por si só, implantação da aplicação.
@@ -690,14 +628,10 @@ A API serverless usa [api/index.mjs](api/index.mjs). Não coloque credenciais em
 | Técnico não consegue iniciar | Precisa ser responsável/participante autorizado e o chamado deve ter responsável principal. |
 | Não consegue concluir | Apenas responsável principal/gestão; solução obrigatória e revisão atual. |
 | Transferência ou desativação bloqueada | Reatribua responsabilidades e encerre participações em chamados pendentes. |
-| Usuário migrado não entra | A conta começa inativa e sem senha; defina senha e ativação pela gestão autorizada. |
+| Conta inativa não entra | Defina senha e ativação pela gestão autorizada. |
 | CPF duplicado/inválido | Confira dígitos e cadastros existentes; a verificação não consulta cadastro oficial. |
-| Excel não carrega | A biblioteca vem de CDN; use CSV/JSON ou restabeleça a conexão. |
-| Migração relata referência ausente | Confira os IDs de origem e seus vínculos, não apenas os nomes visíveis. |
-| Mesmo ID importado com outro conteúdo | O sistema impede sobrescrita. Use a edição do cadastro ou outro conjunto de origem. |
 | Anexo rejeitado | Confira formato real, extensão, duplicidade, tamanho e permissões. |
 | Lembrete indisponível | Solicitação já triada ou ainda dentro do intervalo de uma hora. |
-| IA não usa modelo externo | Verifique chave e modelo no servidor; falhas retornam análise local identificada. |
 | Vercel informa banco indisponível | Verifique `DATABASE_URL`, rede, certificados e configuração do serviço PostgreSQL. |
 | Mudou de banco e os dados sumiram | PGlite e PostgreSQL remoto têm armazenamentos separados; a configuração não migra os registros. |
 
@@ -705,14 +639,15 @@ A API serverless usa [api/index.mjs](api/index.mjs). Não coloque credenciais em
 
 - Dados demonstrativos são fictícios; a qualidade da análise precisa ser avaliada com histórico real autorizado.
 - A aplicação registra e acompanha manutenção; não controla o elevador nem recebe telemetria/sensores.
-- Não existe integração direta com ERP, fornecedores legados, e-mail, WhatsApp, SMS ou push.
+- Não existe integração direta com ERP, fornecedores legados, e-mail, WhatsApp ou SMS.
 - Não há funcionamento offline completo com sincronização posterior, cadastro público ou recuperação de senha por e-mail.
-- A IA não interpreta anexos automaticamente e não confirma diagnóstico ou eficácia de reparo.
+- A identificação de recorrências não interpreta anexos automaticamente e não confirma diagnóstico ou eficácia de reparo.
 - O SLA é de resolução em horas corridas, sem calendários contratuais comerciais.
 - Cargos não determinam qualificação técnica nem ampliam permissões automaticamente.
 - A exportação SQL de domínio não substitui backup completo.
 - PGlite local atende ao desenvolvimento/demonstração em um processo; múltiplas instâncias exigem banco compartilhado apropriado.
-- Testes de nuvem, de dispositivos físicos e validação da síntese com provedor real permanecem separados das verificações locais registradas.
+- Testes de nuvem e de dispositivos físicos permanecem separados das verificações locais registradas.
+- Web Push tem implementação e testes simulados; ativação real depende de HTTPS, configuração VAPID, agendamento e permissão do aparelho. Publicação externa e teste físico permanecem pendentes. Consulte a [lista completa de pendências](docs/REVISAO-DE-REQUISITOS.md#o-que-continua-pendente).
 
 ## Histórico e manutenção no GitHub
 
@@ -723,6 +658,6 @@ Toda alteração do projeto deve ser registrada em commit e sincronizada na bran
 - [AGENTS.md](AGENTS.md): instruções para agentes que trabalharem neste repositório.
 - [PESQUISA-UX-UI.md](docs/PESQUISA-UX-UI.md): decisões de interface, indicadores e responsividade.
 - [CARGOS-E-PORTAL.md](docs/CARGOS-E-PORTAL.md): cargos, equipes, rascunhos, portal e base fictícia.
-- [MIGRACAO-E-SISTEMAS-DO-SETOR.md](docs/MIGRACAO-E-SISTEMAS-DO-SETOR.md): fontes do setor e formato de migração.
+- [MIGRACAO-E-SISTEMAS-DO-SETOR.md](docs/MIGRACAO-E-SISTEMAS-DO-SETOR.md): pesquisa histórica do setor e possibilidades de evolução futura.
 
 Código-fonte, migrações, scripts, testes, dependências declaradas e exemplos fictícios são versionados. `node_modules/`, `public/` gerada, `.env`, `.fieldiq/`, resultados de testes e credenciais de implantação são ignorados conforme [.gitignore](.gitignore).

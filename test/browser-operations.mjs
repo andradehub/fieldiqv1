@@ -7,7 +7,7 @@ import {createApp} from '../server/app.mjs';
 import AxeBuilder from '@axe-core/playwright';
 process.env.PLAYWRIGHT_BROWSERS_PATH=path.join(projectRoot,'.fieldiq','browsers');
 const {chromium,webkit}=await import('playwright');
-const db=await createDatabase({dataDir:'memory://',demo:true}),server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');
+const db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false}),server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');
 const base='http://127.0.0.1:'+server.address().port,output=path.join(projectRoot,'test-results','operations');await mkdir(output,{recursive:true});
 const errors=[],scans=[];
 async function check(page,label){
@@ -35,8 +35,6 @@ try{
       await page.locator('.tickets-tabs [data-status=""]').click();
       await nav(page,'usuarios');await page.locator('[data-action="user-open"]').first().click();
       await check(page,engine+' '+width+' user form');await page.screenshot({path:path.join(output,engine+'-'+width+'-usuario.png')});await page.keyboard.press('Escape');
-      await nav(page,'importacao');await page.locator('#import-file').setInputFiles(path.join(projectRoot,'fieldiqarchives/public/exemplo-migracao.json'));
-      await page.locator('#import-validate').click();await page.locator('#import-submit').waitFor();await check(page,engine+' '+width+' migration');await page.keyboard.press('Escape');
       const created=await page.request.post(base+'/api/chamados',{data:{titulo:'Teste móvel '+engine+' '+width,elevador_id:1,tecnico:'TK-CAP-001'}});assert.equal(created.status(),201);const id=(await created.json()).id;
       await nav(page,'chamados');await page.locator('#ticket-search').fill('Teste móvel '+engine+' '+width);await page.locator('[data-action="open-ticket"][data-id="'+id+'"]').click();
       await page.locator('[data-action="attendance-start"]').click();await page.locator('[data-action="attendance-pause"]').waitFor();

@@ -1,24 +1,25 @@
 export const state = {
-  user:null, zonas:[], pessoas:[], locais:[], elevadores:[], chamados:[], importacoes:[], solicitacoes:[],
+  user:null, zonas:[], pessoas:[], locais:[], elevadores:[], chamados:[], solicitacoes:[],
   config:{demo:true,quickDemo:false}, updatedAt:null, usuarios:[],
   ui:{
     route:'dashboard', period:'all', sidebar:false,
     filters:{search:'',status:'',priority:'',work:'',technician:'',equipment:''},
     assets:{tab:'elevadores',search:'',zone:''}, team:'mine',
-    newTicket:{step:1,titulo:'',descricao:'',elevador_id:'',tipo_obra:'mod_parcial',prioridade:'media',sla_horas:24,tecnico:''},
-    ticket:null, upload:null,
+    newTicket:{step:1,titulo:'',descricao:'',elevador_id:'',tipo_obra:'mod_parcial',prioridade:'B',sla_horas:24,tecnico:''},
+    ticket:null,sorts:{},technicianProfile:null,profileRegistration:null,
     database:{info:null,table:'chamados',data:null,search:'',error:null}
   }
 };
 export const routes = {
   dashboard:{label:'Visão geral',icon:'LayoutDashboard',section:'Operação'},
   chamados:{label:'Chamados',icon:'Tickets',section:'Operação'},
+  meuschamados:{label:'Meus chamados',icon:'ClipboardCheck',section:'Operação',field:true},
   novochamado:{label:'Novo chamado',icon:'CirclePlus',section:'Operação',supervisor:true},
   elevadores:{label:'Elevadores e locais',icon:'Building2',section:'Operação'},
   tecnicos:{label:'Equipe de campo',icon:'UsersRound',section:'Gestão'},
+  perfiltecnico:{label:'Perfil do técnico',icon:'UserRound',section:'Gestão',hidden:true},
   usuarios:{label:'Gestão de usuários',icon:'UserRoundCog',section:'Gestão',supervisor:true},
   solicitacoes:{label:'Solicitações de clientes',icon:'Inbox',section:'Operação',supervisor:true},
-  importacao:{label:'Importar dados',icon:'Upload',section:'Gestão',supervisor:true},
   banco:{label:'Banco de dados',icon:'Database',section:'Sistema',supervisor:true},
   perfil:{label:'Meu perfil',icon:'UserRound',section:'Sistema'}
 };
@@ -36,7 +37,6 @@ export const personName=id=>state.pessoas.find(p=>p.matricula===id)?.nome??'Não
 export function acceptData(data){
   state.user=data.user;
   for(const key of ['zonas','pessoas','locais','elevadores','chamados'])state[key]=data[key];
-  state.importacoes=data.importacoes;
   state.solicitacoes=data.solicitacoes??[];
   state.updatedAt=new Date();
 }

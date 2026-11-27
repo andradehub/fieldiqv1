@@ -1,4 +1,5 @@
-import {insist,getTicket,canEdit,canClose,manages,integer,oneOf,optionalText} from './permissions.mjs';
+import {insist,getTicket,canEdit,canClose,manages,integer,oneOf,optionalText,text} from './permissions.mjs';
+import {notifyAssignment,notifyTeam} from './notifications.mjs';
 
 export async function closeIntervals(db,id){await db.query('UPDATE atendimentos SET encerrado_em=now() WHERE chamado_id=$1 AND encerrado_em IS NULL',[id]);}
 export async function beginInterval(db,ticket,user){
@@ -27,6 +28,7 @@ export function registerAttendanceRoutes(api,db){
         await tx.query("UPDATE chamados SET tecnico_matricula=NULL,status='aberto',revisao=revisao+1 WHERE id=$1",[c.id]);
       }
       await tx.query('INSERT INTO historico_chamados(chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)',[c.id,req.user.matricula,action==='assumir'?'Responsabilidade assumida pelo técnico. O atendimento ainda não foi iniciado.':'Responsabilidade liberada. Chamado aberto e disponível; períodos pausados, sem alterar o SLA.']);
+      await notifyAssignment(tx,c,req.user,{anterior:c.tecnico_matricula,atual:action==='assumir'?req.user.matricula:null,assumido:action==='assumir',chave:'responsavel:'+c.id+':'+(c.revisao+1)});
       return {id:c.id,revisao:c.revisao+1};
     });res.json(result);
   });
@@ -41,22 +43,34 @@ export function registerAttendanceRoutes(api,db){
       await tx.query('UPDATE atendimentos SET encerrado_em=now() WHERE chamado_id=$1 AND tecnico_matricula=$2 AND encerrado_em IS NULL',[c.id,mat]);
       await tx.query('UPDATE chamados SET revisao=revisao+1 WHERE id=$1',[c.id]);
       await tx.query('INSERT INTO historico_chamados(chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)',[c.id,req.user.matricula,'Participação encerrada na equipe: '+mat+'. Períodos de trabalho preservados.']);
+      await notifyTeam(tx,c,req.user,mat,false,'equipe:'+c.id+':'+(c.revisao+1));
     });res.json({ok:true});
   });
   api.post('/chamados/:id/equipe',async(req,res)=>{
     const result=await db.transaction(async tx=>{
       const c=await getTicket(tx,req.params.id,req.user,true);
-      insist(['aberto','em_andamento'].includes(c.status)&&c.tecnico_matricula,409,'O chamado precisa estar aberto e ter um responsável.');
-      const matricula=req.body.matricula??req.user.matricula;
+      insist(['aberto','em_andamento'].includes(c.status),409,'Reabra o chamado antes de incluir um técnico.');
+      if(req.body.revisao!==undefined)insist(integer(req.body.revisao,'Revisão')===c.revisao,409,'O chamado mudou. Confira a equipe atualizada.');
+      const matricula=text(req.body.matricula??req.user.matricula,'Matrícula',40);
       insist(req.user.role==='tecnico'||manages(req.user),403,'Perfil sem permissão para participar.');
       insist(manages(req.user)||matricula===req.user.matricula,403,'Você pode ingressar apenas com sua própria conta.');
-      const person=(await tx.query("SELECT matricula FROM pessoas WHERE matricula=$1 AND role='tecnico' AND ativo AND zona_id=$2",[matricula,c.zona_id])).rows[0];
+      const person=(await tx.query("SELECT matricula,nome FROM pessoas WHERE matricula=$1 AND role='tecnico' AND ativo AND zona_id=$2",[matricula,c.zona_id])).rows[0];
       insist(person,400,'Selecione um técnico ativo da zona do chamado.');
+      if(!c.tecnico_matricula){
+        insist(manages(req.user),409,'Assuma o chamado antes de iniciar sua participação.');
+        await closeIntervals(tx,c.id);
+        await tx.query("UPDATE chamados SET tecnico_matricula=$1,status='aberto',revisao=revisao+1 WHERE id=$2",[matricula,c.id]);
+        await tx.query('DELETE FROM equipe_chamado WHERE chamado_id=$1 AND tecnico_matricula=$2',[c.id,matricula]);
+        await tx.query('INSERT INTO historico_chamados(chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)',[c.id,req.user.matricula,'Responsável principal definido pela gestão: '+person.nome+' ('+matricula+'). O atendimento ainda não foi iniciado.']);
+        await notifyAssignment(tx,c,req.user,{atual:matricula,chave:'responsavel:'+c.id+':'+(c.revisao+1)});
+        return {id:c.id,revisao:c.revisao+1,responsavel:true};
+      }
       if(matricula===c.tecnico_matricula)return {id:c.id,revisao:c.revisao};
       const added=await tx.query('INSERT INTO equipe_chamado(chamado_id,tecnico_matricula,adicionado_por) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING RETURNING tecnico_matricula',[c.id,matricula,req.user.matricula]);
       if(added.rows.length){
         await tx.query('UPDATE chamados SET revisao=revisao+1 WHERE id=$1',[c.id]);
-        await tx.query('INSERT INTO historico_chamados(chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)',[c.id,req.user.matricula,'Participante adicionado à equipe: '+matricula]);
+        await tx.query('INSERT INTO historico_chamados(chamado_id,usuario_matricula,alteracao) VALUES ($1,$2,$3)',[c.id,req.user.matricula,'Participante adicionado à equipe: '+person.nome+' ('+matricula+')']);
+        await notifyTeam(tx,c,req.user,matricula,true,'equipe:'+c.id+':'+(c.revisao+1));
       }
       return {id:c.id,revisao:c.revisao+Number(added.rows.length>0)};
     });res.json(result);

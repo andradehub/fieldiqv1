@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {chromium} from 'playwright';
 import {createDatabase,projectRoot} from '../server/db.mjs';
 import {createApp} from '../server/app.mjs';
-const db=await createDatabase({dataDir:'memory://',demo:true}),server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');
+const db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false}),server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');
 const base='http://127.0.0.1:'+server.address().port,browser=await chromium.launch({channel:'msedge',headless:true}),output=path.join(projectRoot,'test-results','followups');await mkdir(output,{recursive:true});
 async function nav(page,route){await page.locator('#sidebar [data-route="'+route+'"]').click();}
 async function enter(login){const context=await browser.newContext({viewport:{width:1440,height:1000}}),page=await context.newPage();await page.goto(base);await page.locator('#login-user').fill(login);await page.locator('#login-pass').fill('tk2026');await page.locator('#login-submit').click();await page.locator('#page-title').waitFor();return {context,page};}

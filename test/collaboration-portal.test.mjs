@@ -1,8 +1,6 @@
 import {test,before,after} from 'node:test';
 import assert from 'node:assert/strict';
 import {once} from 'node:events';
-import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import {createApp} from '../server/app.mjs';
 import {createDatabase,projectRoot} from '../server/db.mjs';
 let db,server,base,admin,ana,carlos,supervisor,interior,client;
@@ -11,7 +9,7 @@ async function request(route,{cookie=admin,method='GET',body}={}){
  return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};
 }
 async function login(login,senha='tk2026'){const r=await request('/auth/login',{method:'POST',body:{login,senha}});assert.equal(r.status,200);return r.cookie;}
-before(async()=>{db=await createDatabase({dataDir:'memory://',demo:true});server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');base='http://127.0.0.1:'+server.address().port;admin=await login('administrativo');ana=await login('ana.capital');carlos=await login('tecnico.capital');supervisor=await login('supervisor.capital');interior=await login('supervisor.interior');client=await login('cliente.barra');});
+before(async()=>{db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false});server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');base='http://127.0.0.1:'+server.address().port;admin=await login('administrativo');ana=await login('ana.capital');carlos=await login('tecnico.capital');supervisor=await login('supervisor.capital');interior=await login('supervisor.interior');client=await login('cliente.barra');});
 after(async()=>{await new Promise(r=>server.close(r));await db.close();});
 test('cargos são restritos ao perfil, incluindo estagiário de campo; nomes legados podem permanecer',async()=>{
  const post=body=>request('/usuarios',{method:'POST',body:{matricula:'INTERN-TEST',nome:'Estagiário fictício',role:'tecnico',cargo:'Estagiário de campo',cpf:'11144477735',login:'intern.teste',senha:'senha-estagiario-123',ativo:true,zona_id:'cap-04',...body}});
@@ -19,7 +17,7 @@ test('cargos são restritos ao perfil, incluindo estagiário de campo; nomes leg
  assert.equal((await post({cargo:'Cargo arbitrário'})).status,400);
  assert.equal((await post({})).status,201);
  const p=(await request('/usuarios')).data.usuarios.find(p=>p.matricula==='INTERN-TEST');assert.equal(p.cargo,'Estagiário de campo');
- assert.equal((await request('/usuarios/TK-CAP-002',{cookie:supervisor,method:'PATCH',body:{telefone:'(21) 00000-1234'}})).status,200);
+ assert.equal((await request('/usuarios/TK-CAP-002',{method:'PATCH',body:{telefone:'(21) 00000-1234'}})).status,200);
 });
 test('equipe mantém responsável, permite períodos simultâneos e pausa apenas o técnico que acionou',async()=>{
  const created=await request('/chamados',{cookie:supervisor,method:'POST',body:{titulo:'Equipe compartilhada',elevador_id:1,tecnico:'TK-CAP-002',sla_horas:24}});const id=created.data.id;
@@ -89,19 +87,10 @@ test('solicitação, lembrete, triagem e encerramento preservam a abertura origi
  assert.equal((await request('/solicitacoes',{cookie:interior})).data.solicitacoes.length,0);
  assert.equal((await request('/solicitacoes',{cookie:supervisor})).data.solicitacoes[0].total_lembretes,1);
  await db.query("UPDATE solicitacoes_clientes SET aberto_em=now()-interval '2 days' WHERE id=$1",[id]);
- const accepted=await request('/solicitacoes/'+id+'/triagem',{cookie:supervisor,method:'POST',body:{acao:'aceitar',tecnico:'TK-CAP-001',prioridade:'alta',sla_horas:24}});assert.equal(accepted.status,200);const call=accepted.data.chamado_id;
+ const accepted=await request('/solicitacoes/'+id+'/triagem',{cookie:supervisor,method:'POST',body:{acao:'aceitar',tecnico:'TK-CAP-001',prioridade:'A',sla_horas:24}});assert.equal(accepted.status,200);const call=accepted.data.chamado_id;
  const row=(await db.query('SELECT * FROM vw_chamados_metricas WHERE id=$1',[call])).rows[0];assert.ok(row.sla_vencido);assert.ok(new Date(row.aberto_em)<new Date(Date.now()-86400000));
  assert.equal((await request('/solicitacoes/'+id+'/triagem',{cookie:supervisor,method:'POST',body:{acao:'aceitar'}})).status,409);
  assert.equal((await request('/portal/solicitacoes/'+id+'/lembrete',{cookie:client,method:'POST'})).status,409);
  assert.equal((await request('/chamados/'+call+'/atendimento',{cookie:carlos,method:'POST',body:{acao:'concluir',revisao:row.revisao,solucao:'Solução fictícia registrada.'}})).status,200);
  const own=(await request('/portal/bootstrap',{cookie:client})).data.solicitacoes.find(s=>s.id===id);assert.equal(own.chamado_status,'resolvido');assert.ok(own.resolvido_em);assert.ok(!('solucao' in own));assert.ok(!('tecnico_matricula' in own));
-});
-test('base fictícia completa importa fotos, zonas, equipes e tempos sem duplicar registros',async()=>{
- const pacote=JSON.parse(await readFile(path.join(projectRoot,'fieldiqarchives/public/demonstracao-fieldiq.json'),'utf8'));
- const validate=await request('/migracoes',{method:'POST',body:{pacote,confirmar:false}});assert.equal(validate.status,200,JSON.stringify(validate.data));assert.equal(validate.data.resumo.criados.pessoas,40);
- assert.equal((await db.query("SELECT matricula FROM pessoas WHERE matricula LIKE 'DEMO2-%'")).rows.length,0);
- const imported=await request('/migracoes',{method:'POST',body:{pacote,confirmar:true}});assert.equal(imported.status,200,JSON.stringify(imported.data));
- const users=(await db.query("SELECT * FROM pessoas WHERE matricula LIKE 'DEMO2-%'")).rows;assert.equal(users.length,40);assert.ok(users.every(p=>p.foto?.startsWith('data:image/png;base64,')&&p.cpf&&p.email&&p.telefone));assert.ok(users.some(p=>p.cargo==='Estagiário de campo'));
- const calls=(await db.query("SELECT * FROM vw_chamados_metricas WHERE elevador_codigo LIKE 'DEMO2-%'")).rows;assert.equal(calls.length,160);assert.equal(new Set(calls.map(c=>c.zona_id)).size,10);assert.ok(calls.some(c=>c.status==='resolvido'&&c.sla_cumprido===false));assert.ok(calls.some(c=>c.equipe_matriculas.length>1));assert.ok(calls.some(c=>Number(c.tempo_atendimento_seg)>0));
- assert.ok((await request('/migracoes',{method:'POST',body:{pacote,confirmar:true}})).data.ja_importado);
 });

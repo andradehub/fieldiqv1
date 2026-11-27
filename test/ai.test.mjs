@@ -12,29 +12,14 @@ test('sem evidência: não inventa solução e não chama provedor',async()=>{
   assert.deepEqual(answer.evidencias_ids,[]);
   assert.match(answer.sugestao,/Não há soluções anteriores suficientes/);
 });
-test('provedor generativo só é aceito com referências válidas; falha retorna análise local explícita',async()=>{
-  const previousFetch=globalThis.fetch;
-  const previousKey=process.env.OPENAI_API_KEY;
-  const previousModel=process.env.OPENAI_MODEL;
-  process.env.OPENAI_API_KEY='chave-ficticia-do-teste';
-  process.env.OPENAI_MODEL='modelo-ficticio-do-teste';
-  let lastRequest;
-  const response=ids=>({output:[{content:[{type:'output_text',text:JSON.stringify({resumo:'Recorrência documentada.',hipotese:'Sintomas semelhantes no conjunto de detecção.',sugestao:'Consultar a solução registrada e validar o atendimento atual.',evidencias_ids:ids,limites:'Hipótese baseada apenas nos registros fornecidos.'})}]}]});
+test('identificação de recorrências usa somente histórico local, mesmo com configurações antigas de LLM',async()=>{
+  const previousFetch=globalThis.fetch,previousKey=process.env.OPENAI_API_KEY,previousModel=process.env.OPENAI_MODEL;
+  process.env.OPENAI_API_KEY='valor-ficticio-antigo';process.env.OPENAI_MODEL='modelo-antigo';
   try{
-    globalThis.fetch=async (_url,options)=>{lastRequest=JSON.parse(options.body);return new Response(JSON.stringify(response([1])),{status:200});};
-    const valid=await suggestForTicket(fakeDatabase(),current,[earlier]);
-    assert.equal(valid.provedor,'openai');
-    assert.equal(lastRequest.store,false);
-    assert.deepEqual(valid.evidencias_ids,[1]);
-    globalThis.fetch=async()=>new Response(JSON.stringify(response([999])),{status:200});
-    const invalid=await suggestForTicket(fakeDatabase(),current,[earlier]);
-    assert.equal(invalid.provedor,'local_tfidf');
-    assert.ok(invalid.aviso);
-    assert.deepEqual(invalid.evidencias_ids,[1]);
-    globalThis.fetch=async()=>{throw new Error('Falha de rede simulada');};
-    const unavailable=await suggestForTicket(fakeDatabase(),current,[earlier]);
-    assert.equal(unavailable.provedor,'local_tfidf');
-    assert.match(unavailable.aviso,/indisponível/);
+    globalThis.fetch=()=>{throw new Error('Não deve haver chamada externa');};
+    const result=await suggestForTicket(fakeDatabase(),current,[earlier]);
+    assert.equal(result.provedor,'local_tfidf');assert.equal(result.aviso,null);assert.deepEqual(result.evidencias_ids,[1]);
+    assert.match(result.limites,/avaliação completa do técnico/);assert.match(result.sugestao,/Solução fictícia documentada/);
   }finally{
     globalThis.fetch=previousFetch;
     if(previousKey===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=previousKey;

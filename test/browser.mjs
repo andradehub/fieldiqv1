@@ -9,14 +9,14 @@ import {createApp} from '../server/app.mjs';
 const localBrowsers=path.join(projectRoot,'.fieldiq','browsers');
 if(existsSync(localBrowsers))process.env.PLAYWRIGHT_BROWSERS_PATH=localBrowsers;
 const {chromium,webkit}=await import('playwright');
-const db=await createDatabase({dataDir:'memory://',demo:true});
+const db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false});
 const server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');
 const base='http://127.0.0.1:'+server.address().port;
 const directory=path.join(projectRoot,'test-results','redesign');
 await mkdir(directory,{recursive:true});
 const browser=await chromium.launch({channel:'msedge',headless:true});
 const errors=[],accessibility=[];
-const pageNames={dashboard:'Visão geral',chamados:'Chamados',novochamado:'Novo chamado',elevadores:'Elevadores e locais',tecnicos:'Equipe de campo',usuarios:'Gestão de usuários',solicitacoes:'Solicitações de clientes',importacao:'Importar chamados',banco:'Banco de dados',perfil:'Meu perfil'};
+const pageNames={meuschamados:'Meus chamados',dashboard:'Visão geral',chamados:'Chamados',novochamado:'Novo chamado',elevadores:'Elevadores e locais',tecnicos:'Equipe de campo',usuarios:'Gestão de usuários',solicitacoes:'Solicitações de clientes',banco:'Banco de dados',perfil:'Meu perfil'};
 async function login(page,who){
   await page.goto(base,{waitUntil:'domcontentloaded'});
   await page.locator('[data-action="demo-login"][data-login="'+who+'"]').click();
@@ -47,6 +47,9 @@ try{
   await page.goto(base,{waitUntil:'domcontentloaded'});await page.locator('#login-form').waitFor();
   await screenshot(page,'desktop-login');await axe(page,'login');
   await page.locator('[data-login="tecnico.capital"]').click();await page.locator('#page-title').waitFor();
+  await page.goto(base+'/#importacao');await page.locator('#page-title').filter({hasText:'Visão geral'}).waitFor();
+  assert.ok(page.url().endsWith('#dashboard'));
+  assert.equal(await page.locator('[data-route="importacao"]').count(),0);
   assert.equal(await page.locator('#sidebar [data-route="banco"]').count(),0);
   await page.locator('.metric-card[data-filter="pending"]').click();
   const bootstrap=await (await page.request.get(base+'/api/bootstrap')).json();
@@ -80,7 +83,8 @@ try{
   await page.keyboard.press('Escape');
   await page.locator('#sidebar [data-action="logout"]').click();
   await page.locator('[data-login="supervisor.capital"]').click();await page.locator('#page-title').waitFor();
-  for(const route of ['dashboard','chamados','novochamado','elevadores','tecnicos','importacao','banco','perfil']){
+  assert.equal(await page.locator('[data-route="importacao"]').count(),0);
+  for(const route of ['dashboard','chamados','novochamado','elevadores','tecnicos','banco','perfil']){
     await navigate(page,route);
     if(route==='banco')await page.locator('.database-data tbody tr').first().waitFor();
     await noOverflow(page,'desktop '+route);await screenshot(page,'desktop-'+route);await axe(page,'desktop '+route);
@@ -115,23 +119,21 @@ try{
   assert.equal(await page.locator('img[src="x"]').count(),0);
   assert.equal(await page.evaluate(()=>window.__xss),undefined);
   await page.keyboard.press('Escape');
-  await navigate(page,'importacao');
-  await page.locator('#import-file').setInputFiles({name:'quoted.csv',mimeType:'text/csv',buffer:Buffer.from('titulo,elevador_codigo,descricao\n"Teste, com vírgula",BAR-001,"Descrição em duas\nlinhas"\n')});
-  await page.locator('#import-validate').click();await page.locator('#import-submit').waitFor();await screenshot(page,'desktop-importacao-previa');
-  await page.locator('#import-submit').click();
-  await page.locator('#import-result').filter({hasText:'1 chamado(s) importado(s)'}).waitFor();
   await navigate(page,'banco');await page.locator('.database-data tbody tr').first().waitFor();
   const exported=await page.request.get(base+'/api/banco/export');
   assert.equal(exported.status(),200);assert.match(await exported.text(),/INSERT INTO chamados/);
   await navigate(page,'usuarios');
+  assert.equal(await page.locator('[data-action="user-open"]').count(),0);
+  const contacts=await (await page.request.get(base+'/api/usuarios')).json();assert.ok(contacts.usuarios.every(p=>!('login' in p)&&!('cpf_mascarado' in p)));
+  await page.locator('#sidebar [data-action="logout"]').click();await page.locator('[data-login="administrativo"]').click();await page.locator('#page-title').waitFor();await navigate(page,'usuarios');
   await page.locator('[data-action="user-open"]').first().click();
   await page.locator('#user-name').fill('Colaborador fictício da interface');
   await page.locator('#user-registration').fill('UI-TEST');await page.locator('#user-cpf').fill('52998224725');
-  assert.equal(await page.locator('#user-zone').isDisabled(),true);
-  assert.equal(await page.locator('#user-role option').count(),1);
+  assert.equal(await page.locator('#user-zone').isDisabled(),false);await page.locator('#user-zone').selectOption('cap-04');
+  assert.equal(await page.locator('#user-role option').count(),3);
   await page.locator('#user-email').fill('ui@example.com');await page.locator('#user-phone').fill('(21) 00000-0000');
   await page.locator('#user-admission').fill('2026-01-02');await page.locator('#user-login').fill('colaborador.ui');await page.locator('#user-password').fill('senha-ficticia-ui');
-  await axe(page,'cadastro de técnico pelo supervisor');await screenshot(page,'desktop-usuario-cadastro');
+  await axe(page,'cadastro de técnico pelo Administrativo');await screenshot(page,'desktop-usuario-cadastro');
   await page.locator('form[data-form="user"] button[type="submit"]').click();await page.locator('#utility-dialog').waitFor({state:'hidden'});
   await page.locator('#user-search').fill('UI-TEST');await page.locator('.users-panel tbody').filter({hasText:'Colaborador fictício'}).waitFor();
   await page.locator('[data-action="user-open"][data-registration="UI-TEST"]').click();await page.locator('#user-phone').fill('(21) 99999-0000');
@@ -155,10 +157,6 @@ try{
   const resolvedCall=(await db.query('SELECT * FROM vw_chamados_metricas WHERE id=$1',[callId])).rows[0];assert.equal(resolvedCall.sla_cumprido,false);assert.ok(resolvedCall.iniciado_em&&resolvedCall.resolvido_em);
   await page.locator('#sidebar [data-action="logout"]').click();await page.locator('[data-login="administrativo"]').click();await page.locator('#page-title').waitFor();
   await navigate(page,'usuarios');await page.locator('[data-action="user-open"]').first().click();assert.equal(await page.locator('#user-zone').isDisabled(),false);assert.equal(await page.locator('#user-role option').count(),3);await axe(page,'cadastro administrativo');await page.keyboard.press('Escape');
-  await navigate(page,'importacao');await page.locator('#import-file').setInputFiles(path.join(projectRoot,'fieldiqarchives/public/exemplo-migracao.json'));
-  await page.locator('#import-validate').click();await page.locator('#import-submit').waitFor();await axe(page,'validação de migração');await screenshot(page,'desktop-migracao');
-  await page.locator('#import-submit').click();await page.locator('#import-result').filter({hasText:'Importação concluída'}).waitFor();await page.keyboard.press('Escape');
-  await navigate(page,'usuarios');await page.locator('#user-search').fill('LEG-100');await page.locator('.users-panel tbody').filter({hasText:'Inativo'}).waitFor();
   await context.close();
 
   for(const width of [320,375,390,430,768,834,1024]){
@@ -170,7 +168,7 @@ try{
       await navigate(mobile,route);
       if(route==='banco')await mobile.locator('.database-data tbody tr').first().waitFor();
       await noOverflow(mobile,width+' '+route);
-      if((width===390&&['dashboard','chamados','novochamado','importacao','banco'].includes(route))||(width===834&&route==='dashboard'))await screenshot(mobile,width+'-'+route);
+      if((width===390&&['dashboard','chamados','novochamado','banco'].includes(route))||(width===834&&route==='dashboard'))await screenshot(mobile,width+'-'+route);
     }
     if(width===390){
       await navigate(mobile,'chamados');
@@ -185,7 +183,6 @@ try{
       await mobile.locator('#nc-desc').fill('Registro fictício pela interface móvel.');
       await mobile.locator('#new-ticket-next').click();await mobile.locator('#new-ticket-next').click();
       await mobile.locator('#ticket-dialog').waitFor({state:'visible'});await mobile.keyboard.press('Escape');
-      await navigate(mobile,'importacao');await axe(mobile,'390 importação');
     }
     await context.close();
   }

@@ -14,7 +14,7 @@ async function request(route,{cookie,method='GET',body,origin}={}) {
 }
 async function login(login){const result=await request('/auth/login',{method:'POST',body:{login,senha:'tk2026'}});assert.equal(result.status,200);return result.cookie;}
 before(async()=>{
-  db=await createDatabase({dataDir:'memory://',demo:true});
+  db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false});
   server=createApp(db).listen(0,'127.0.0.1');
   await once(server,'listening');
   base='http://127.0.0.1:'+server.address().port;
@@ -44,7 +44,7 @@ test('técnico não administra banco, cria chamados ou altera outros responsáve
   assert.equal((await request('/equipe',{cookie:technician,method:'POST',body:{matricula:'TK-CAP-002'}})).status,403);
 });
 test('técnico encerra o próprio chamado com solução; SLA e histórico são calculados',async()=>{
-  const created=await request('/chamados',{cookie:supervisor,method:'POST',body:{titulo:'Teste de SLA',elevador_id:1,tipo_obra:'mod_parcial',prioridade:'alta',sla_horas:1,tecnico:'TK-CAP-001'}});
+  const created=await request('/chamados',{cookie:supervisor,method:'POST',body:{titulo:'Teste de SLA',elevador_id:1,tipo_obra:'mod_parcial',prioridade:'A',sla_horas:1,tecnico:'TK-CAP-001'}});
   assert.equal(created.status,201);
   const id=created.data.id;
   await db.query("UPDATE chamados SET aberto_em=now()-interval '2 days' WHERE id=$1",[id]);
@@ -84,33 +84,22 @@ test('recorrência usa evidências anteriores e prioriza o mesmo elevador na reg
   assert.equal((await request('/sugestoes/'+result.data.id+'/avaliacao',{cookie:technician,method:'POST',body:{util:true}})).status,200);
   assert.equal((await db.query('SELECT util FROM avaliacoes_ia WHERE sugestao_id=$1',[result.data.id])).rows[0].util,true);
 });
-test('prévia de chamados valida duplicados e erros sem gravar chamados, histórico ou importação',async()=>{
-  const row={elevador_codigo:'BAR-002',titulo:'Prévia sem gravação',aberto_em:'2026-02-01T12:00:00Z'};
-  const body={nome:'previa.json',formato:'json',linhas:[row,row,{titulo:'Sem equipamento'}],confirmar:false};
-  const counts=async()=>Promise.all(['chamados','historico_chamados','importacoes'].map(async table=>(await db.query('SELECT count(*) AS total FROM '+table)).rows[0].total));
+test('importação retirada: rotas e exemplos indisponíveis sem alterar dados existentes',async()=>{
+  const counts=async()=>Promise.all(['pessoas','locais','elevadores','chamados','historico_chamados','importacoes','migracoes_legado','referencias_legado'].map(async table=>(await db.query('SELECT count(*) AS total FROM '+table)).rows[0].total));
   const before=await counts();
-  const result=await request('/importacoes/validar',{cookie:supervisor,method:'POST',body:{...body,confirmar:true}});
-  assert.equal(result.status,200,JSON.stringify(result.data));
-  assert.equal(result.data.validado,true);assert.equal(result.data.validas,1);assert.equal(result.data.importadas,0);
-  assert.equal(result.data.duplicadas,1);assert.equal(result.data.erros,2);assert.deepEqual(await counts(),before);
-  assert.equal((await request('/importacoes/validar',{cookie:technician,method:'POST',body})).status,403);
-  const foreign=await request('/importacoes',{cookie:supervisor,method:'POST',body:{...body,linhas:[{...row,elevador_codigo:'NIT-001'}]}});
-  assert.equal(foreign.data.validas,0);assert.deepEqual(await counts(),before);
-  const confirmed=await request('/importacoes',{cookie:supervisor,method:'POST',body:{...body,confirmar:true}});
-  assert.equal(confirmed.data.importadas,1);assert.equal(confirmed.data.duplicadas,1);
-  const again=await request('/importacoes',{cookie:supervisor,method:'POST',body});
-  assert.equal(again.data.validas,0);assert.equal(again.data.duplicadas,2);
+  for(const route of ['/importacoes','/importacoes/validar','/migracoes']){
+    const result=await request(route,{cookie:supervisor,method:'POST',body:{nome:'retirado.json',formato:'json',linhas:[{elevador_codigo:'BAR-001',titulo:'Não deve ser criado'}],pacote:{formato:'fieldiq-legado-v1'},confirmar:true}});
+    assert.equal(result.status,404,route);
+  }
+  assert.equal((await request('/migracoes',{cookie:supervisor})).status,404);
+  for(const file of ['/exemplo-importacao.csv','/exemplo-migracao.json','/demonstracao-fieldiq.json'])assert.equal((await fetch(base+file)).status,404,file);
+  const bootstrap=(await request('/bootstrap',{cookie:supervisor})).data;
+  assert.ok(!Object.hasOwn(bootstrap,'importacoes'));
+  const catalogue=(await request('/banco',{cookie:supervisor})).data;
+  assert.ok(!catalogue.tabelas.some(table=>table.nome==='importacoes'));
+  assert.deepEqual(await counts(),before);
 });
 
-test('importação preserva datas, exige equipamento e relata duplicados e erros',async()=>{
-  const data={elevador_codigo:'BAR-002',titulo:'Registro importado para teste',descricao:'Iluminação intermitente',status:'resolvido',solucao:'Correção fictícia registrada.',aberto_em:'2026-01-01T12:00:00Z',resolvido_em:'2026-01-01T13:00:00Z'};
-  const result=await request('/importacoes',{cookie:supervisor,method:'POST',body:{nome:'teste.csv',formato:'csv',linhas:[data,data,{titulo:'Sem equipamento'}]}});
-  assert.equal(result.status,200);assert.equal(result.data.importadas,1);assert.equal(result.data.erros,2);
-  const row=(await db.query('SELECT * FROM chamados WHERE titulo=$1',[data.titulo])).rows[0];
-  assert.equal(new Date(row.aberto_em).toISOString(),'2026-01-01T12:00:00.000Z');
-  assert.equal(row.elevador_id,2);
-  assert.ok((await db.query("SELECT * FROM importacoes WHERE nome='teste.csv'")).rows.length);
-});
 test('consulta e exportação mostram dados reais sem sessões ou hashes',async()=>{
   const info=await request('/banco',{cookie:supervisor});
   assert.equal(info.status,200);assert.match(info.data.version,/PostgreSQL/);
@@ -125,7 +114,7 @@ test('consulta e exportação mostram dados reais sem sessões ou hashes',async(
 test('dados persistem depois de fechar e reabrir o PostgreSQL local',async()=>{
   await mkdir(path.join(projectRoot,'test-results'),{recursive:true});
   const dir=await mkdtemp(path.join(projectRoot,'test-results','persist-'));
-  let disk=await createDatabase({dataDir:dir,demo:true});
+  let disk=await createDatabase({dataDir:dir,demo:true,expandedDemo:false});
   const ticket=(await disk.query('SELECT id,revisao FROM chamados WHERE id=5')).rows[0];
   await disk.query('UPDATE chamados SET descricao=$1 WHERE id=$2',['Persistência confirmada após reiniciar.',ticket.id]);
   await assert.rejects(createDatabase({dataDir:dir,demo:false}),/Banco local em uso/);

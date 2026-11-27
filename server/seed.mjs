@@ -42,7 +42,7 @@ export async function seedDatabase(db, password) {
   for (const l of lifts) await db.query('INSERT INTO elevadores (codigo,local_id,fabricante,modelo,numero_serie,capacidade_kg) VALUES ($1,$2,$3,$4,$5,$6)', l);
 
   const now = Date.now();
-  async function ticket({lift = 1, title, desc, days, hours = 2, status = 'resolvido', solution = null, tech = 'TK-CAP-001', sla = 24, type = 'mod_parcial', priority = 'media'}) {
+  async function ticket({lift = 1, title, desc, days, hours = 2, status = 'resolvido', solution = null, tech = 'TK-CAP-001', sla = 24, type = 'mod_parcial', priority = 'B'}) {
     const open = new Date(now - days * 86400000).toISOString();
     const resolved = status === 'resolvido' ? new Date(new Date(open).getTime() + hours * 3600000).toISOString() : null;
     const creator = lift >= 5 ? 'TK-INT-SUP-01' : 'TK-CAP-SUP-01';
@@ -57,17 +57,17 @@ export async function seedDatabase(db, password) {
   const door = 'Porta interrompe o fechamento no térreo, com acionamento intermitente do sensor de presença.';
   const doorSolution = 'Registro fictício: equipe identificou falha intermitente no conjunto de detecção da porta; correção documentada e funcionamento validado conforme procedimento técnico.';
   for (const [days, tech, hours] of [[35,'TK-CAP-001',2],[24,'TK-CAP-002',3],[14,'TK-CAP-001',28],[6,'TK-CAP-003',2]]) {
-    await ticket({title:'Porta não fecha — sensor intermitente',desc:door,days,tech,hours,solution:doorSolution,priority:'alta'});
+    await ticket({title:'Porta não fecha — sensor intermitente',desc:door,days,tech,hours,solution:doorSolution,priority:'A'});
   }
-  await ticket({title:'Porta volta a abrir durante fechamento',desc:door,days:0.15,status:'aberto',priority:'alta'});
+  await ticket({title:'Porta volta a abrir durante fechamento',desc:door,days:0.15,status:'aberto',priority:'A'});
   await ticket({lift:2,title:'Ruído na cabine durante deslocamento',desc:'Ruído metálico relatado na cabine do elevador de serviço.',days:8,tech:'TK-CAP-002',solution:'Registro fictício: origem do ruído identificada e correção validada pela equipe.'});
   await ticket({lift:2,title:'Iluminação da cabine intermitente',desc:'Luzes da cabine oscilando durante o uso.',days:0.3,status:'em_andamento',tech:'TK-CAP-002'});
   await ticket({lift:3,title:'Porta apresenta falha no sensor',desc:door,days:18,tech:'TK-CAP-004',solution:'Registro fictício: conjunto de detecção revisado e funcionamento validado.'});
   await ticket({lift:3,title:'Modernização do quadro de comando',desc:'Atualização planejada do equipamento.',days:3,status:'em_andamento',tech:'TK-CAP-004',type:'mod_integral',sla:120});
   await ticket({lift:4,title:'Instalação de elevador comercial',desc:'Acompanhamento de entrega de equipamento novo.',days:15,hours:72,tech:null,solution:'Registro fictício: instalação concluída e entrega documentada.',type:'obra_nova',sla:120});
-  await ticket({lift:4,title:'Verificação de botoeira',desc:'Acionamento intermitente relatado na botoeira do hall.',days:2,status:'aberto',tech:null,priority:'baixa'});
+  await ticket({lift:4,title:'Verificação de botoeira',desc:'Acionamento intermitente relatado na botoeira do hall.',days:2,status:'aberto',tech:null,priority:'C'});
   for (const days of [28,12]) await ticket({lift:5,title:'Porta não fecha — sensor intermitente',desc:door,days,tech:'TK-INT-001',solution:'Registro fictício exclusivo do Interior: componente inspecionado pela equipe local.'});
-  await ticket({lift:5,title:'Porta volta a abrir no térreo',desc:door,days:0.2,status:'aberto',tech:'TK-INT-001',priority:'alta'});
+  await ticket({lift:5,title:'Porta volta a abrir no térreo',desc:door,days:0.2,status:'aberto',tech:'TK-INT-001',priority:'A'});
   await ticket({lift:5,title:'Ruído na cabine',desc:'Ruído durante deslocamento.',days:7,tech:'TK-INT-002',solution:'Registro fictício: causa registrada e atendimento validado.'});
   await ticket({lift:5,title:'Modernização do painel',desc:'Atualização programada do painel.',days:4,status:'em_andamento',tech:'TK-INT-003',type:'mod_integral',sla:120});
   await ticket({lift:6,title:'Instalação de elevador panorâmico',desc:'Obra nova em hotel demonstrativo.',days:10,hours:96,tech:null,solution:'Registro fictício: obra concluída e entrega aprovada.',type:'obra_nova',sla:168});

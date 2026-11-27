@@ -1,3 +1,4 @@
+import {notificationBell} from './notifications.js';
 import {state,routes,isSupervisor,isAdmin,roleName,regionName,zoneName} from '../core/state.js';
 import {esc} from '../core/format.js';
 import {icon,brandMark,avatar,button,iconButton} from '../components/ui.js';
@@ -34,7 +35,7 @@ export function renderLogin(){
 }
 export function renderSidebar(){
   const pending=state.chamados.filter(c=>['aberto','em_andamento'].includes(c.status)).length;
-  const links=section=>Object.entries(routes).filter(([,r])=>r.section===section&&(!r.supervisor||isSupervisor())).map(([key,r])=>`<a href="#${key}" data-route="${key}" class="nav-link ${state.ui.route===key?'is-active':''}" ${state.ui.route===key?'aria-current="page"':''} aria-label="${r.label}" title="${r.label}">${icon(r.icon,19)}<span>${r.label}</span>${key==='chamados'&&pending?`<span class="nav-count">${pending}</span>`:''}${key==='solicitacoes'&&state.solicitacoes.some(s=>s.status==='aguardando_triagem')?`<span class="nav-count">${state.solicitacoes.filter(s=>s.status==='aguardando_triagem').length}</span>`:''}</a>`).join('');
+  const links=section=>Object.entries(routes).filter(([,r])=>!r.hidden&&r.section===section&&(!r.supervisor||isSupervisor())&&(!r.field||['tecnico','supervisor'].includes(state.user.role))).map(([key,r])=>`<a href="#${key}" data-route="${key}" class="nav-link ${state.ui.route===key?'is-active':''}" ${state.ui.route===key?'aria-current="page"':''} aria-label="${r.label}" title="${r.label}">${icon(r.icon,19)}<span>${r.label}</span>${key==='chamados'&&pending?`<span class="nav-count">${pending}</span>`:''}${key==='solicitacoes'&&state.solicitacoes.some(s=>s.status==='aguardando_triagem')?`<span class="nav-count">${state.solicitacoes.filter(s=>s.status==='aguardando_triagem').length}</span>`:''}</a>`).join('');
   return `<a class="brand" href="#dashboard" data-route="dashboard" aria-label="FieldIQ — visão geral">${brandMark()}<span class="brand__words">FieldIQ<span class="sidebar__subtitle">GESTÃO DE OPERAÇÕES</span></span></a>
     <nav class="sidebar-nav">${['Operação','Gestão','Sistema'].map(s=>`<div class="nav-section"><p class="nav-section__label">${s}</p>${links(s)}</div>`).join('')}</nav>
     <div class="sidebar-context"><div class="sidebar-context__title">${icon('MapPin',16)}Sua equipe</div><p>${esc(isAdmin()?'Todas as zonas':zoneName(state.user.zona_id))}</p></div>
@@ -47,7 +48,7 @@ export function renderTopbar(){
     <nav class="breadcrumb" aria-label="Localização"><span>${route.section}</span>${icon('ChevronRight',14)}<strong>${route.label}</strong></nav></div>
     <div class="topbar__right"><form class="topbar-search" data-form="global-search" role="search">${icon('Search',17)}<input id="global-search" name="search" aria-label="Buscar chamado ou elevador" placeholder="Buscar chamado ou elevador"></form>
     ${state.config.demo?`<span class="topbar-demo">${icon('FlaskConical',14)}Demonstração</span>`:''}
-    <span class="topbar-divider"></span>${iconButton('RefreshCw','Atualizar dados','refresh')}
+    <span class="topbar-divider"></span>${notificationBell()}${iconButton('RefreshCw','Atualizar dados','refresh')}
     <button class="topbar-user" type="button" data-route="perfil" aria-label="Abrir meu perfil">${avatar(state.user,'small')}</button></div>`;
 }
 export function renderBottomNav(){

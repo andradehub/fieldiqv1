@@ -16,4 +16,5 @@ async function check(directory){
   }
 }
 for(const folder of ['server','api','scripts','fieldiqarchives/public/assets/js'])await check(path.join(root,folder));
+const worker=spawnSync(process.execPath,['--check',path.join(root,'fieldiqarchives/public/sw.js')],{encoding:'utf8'});if(worker.status!==0){console.error(worker.stderr);process.exit(1);}count++;
 console.log(count+' arquivos JavaScript verificados.');

@@ -8,9 +8,6 @@ import {createApp,exportDomainSQL} from '../server/app.mjs';
 import {dashboardData} from '../fieldiqarchives/public/assets/js/views/dashboard.js';
 import {state} from '../fieldiqarchives/public/assets/js/core/state.js';
 import {validCPF} from '../server/users.mjs';
-import {convertFolder} from '../scripts/convert-legacy.mjs';
-import {writeFile} from 'node:fs/promises';
-import {execFileSync} from 'node:child_process';
 let db,server,base,admin,supervisor,tech,ana,interior;
 async function call(route,{cookie=admin,body,method='GET',bytes,name}={}){
   const r=await fetch(base+'/api'+route,{method,headers:{cookie,...(body?{'Content-Type':'application/json'}:{}),...(bytes?{'Content-Type':'application/octet-stream','X-File-Name':encodeURIComponent(name)}:{})},body:bytes??(body?JSON.stringify(body):undefined)});
@@ -18,7 +15,7 @@ async function call(route,{cookie=admin,body,method='GET',bytes,name}={}){
 }
 async function login(who,password='tk2026'){const r=await call('/auth/login',{method:'POST',body:{login:who,senha:password}});assert.equal(r.status,200);return r.cookie;}
 before(async()=>{
-  db=await createDatabase({dataDir:'memory://',demo:true});server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');base='http://127.0.0.1:'+server.address().port;
+  db=await createDatabase({dataDir:'memory://',demo:true,expandedDemo:false});server=createApp(db).listen(0,'127.0.0.1');await once(server,'listening');base='http://127.0.0.1:'+server.address().port;
   admin=await login('administrativo');supervisor=await login('supervisor.capital');tech=await login('tecnico.capital');ana=await login('ana.capital');interior=await login('supervisor.interior');
 });
 after(async()=>{if(server)await new Promise(r=>server.close(r));if(db)await db.close();});
@@ -37,21 +34,25 @@ test('zona isola consultas, exportação, IA, banco e acessos diretos; Administr
   assert.ok((await call('/banco/elevadores',{cookie:supervisor})).data.linhas.every(e=>e.codigo.startsWith('BAR-')));
 });
 const person={matricula:'NOVO-001',nome:'Pessoa de teste fictícia',role:'tecnico',cargo:'Técnico de manutenção',cpf:'529.982.247-25',email:'pessoa@example.com',telefone:'(21) 00000-0000',zona_id:'cap-04',login:'pessoa.teste',senha:'senha-ficticia-123',ativo:true,admissao:'2026-01-02'};
-test('cadastro persiste dados e senha protegida; supervisor cria só técnico na própria zona',async()=>{
+test('apenas Administrativo cadastra e edita; supervisor consulta contatos sem CPF ou login',async()=>{
   assert.ok(validCPF(person.cpf));assert.ok(!validCPF('11111111111'));
   assert.equal((await call('/usuarios',{cookie:supervisor,method:'POST',body:{...person,zona_id:'int-01'}})).status,403);
   assert.equal((await call('/usuarios',{cookie:supervisor,method:'POST',body:{...person,role:'supervisor'}})).status,403);
-  assert.equal((await call('/usuarios',{cookie:supervisor,method:'POST',body:{...person,cpf:'00000000000'}})).status,400);
-  assert.equal((await call('/usuarios',{cookie:supervisor,method:'POST',body:person})).status,201);
+  assert.equal((await call('/usuarios',{cookie:supervisor,method:'POST',body:{...person,cpf:'00000000000'}})).status,403);
+  assert.equal((await call('/usuarios',{cookie:supervisor,method:'POST',body:person})).status,403);
+  assert.equal((await call('/usuarios',{method:'POST',body:{...person,cpf:'00000000000'}})).status,400);
+  assert.equal((await call('/usuarios',{method:'POST',body:person})).status,201);
   const p=(await db.query('SELECT * FROM pessoas WHERE matricula=$1',[person.matricula])).rows[0];
   assert.match(p.senha_hash,/^scrypt:/);assert.notEqual(p.senha_hash,person.senha);assert.equal(p.cpf,'52998224725');
   const users=(await call('/usuarios',{cookie:supervisor})).data.usuarios;
-  assert.ok(users.every(u=>u.role==='tecnico'&&u.zona_id==='cap-04'&&!('cpf' in u)&&!('senha_hash' in u)));
-  assert.equal(users.find(u=>u.matricula===person.matricula).cpf_mascarado,'***.***.***-25');
+  assert.ok(users.every(u=>u.role==='tecnico'&&u.zona_id==='cap-04'&&!('cpf' in u)&&!('cpf_mascarado' in u)&&!('login' in u)&&!('senha_hash' in u)));
+  assert.equal(users.find(u=>u.matricula===person.matricula).email,'pessoa@example.com');
+  assert.equal((await call('/usuarios')).data.usuarios.find(u=>u.matricula===person.matricula).cpf_mascarado,'***.***.***-25');
   const cookie=await login(person.login,person.senha);assert.ok(!('cpf' in (await call('/bootstrap',{cookie})).data.user));
   assert.equal((await call('/usuarios/'+person.matricula,{cookie:supervisor,method:'PATCH',body:{zona_id:'cap-02'}})).status,403);
   assert.equal((await call('/equipe',{cookie:supervisor,method:'POST',body:{matricula:person.matricula}})).status,403);
-  assert.equal((await call('/usuarios/'+person.matricula,{cookie:supervisor,method:'PATCH',body:{email:'atualizado@example.com'}})).status,200);
+  assert.equal((await call('/usuarios/'+person.matricula,{cookie:supervisor,method:'PATCH',body:{email:'atualizado@example.com'}})).status,403);
+  assert.equal((await call('/usuarios/'+person.matricula,{method:'PATCH',body:{email:'atualizado@example.com'}})).status,200);
   assert.equal((await call('/usuarios/'+person.matricula,{cookie:interior,method:'PATCH',body:{nome:'Tentativa'}})).status,403);
   assert.equal((await call('/usuarios',{method:'POST',body:{...person,matricula:'INVALID-ADM',role:'administrativo'}})).status,403);
 });
@@ -98,22 +99,6 @@ test('início, pausa, retomada, conclusão e reabertura mantêm SLA, tempos e ta
   state.chamados=(await call('/bootstrap',{cookie:supervisor})).data.chamados;metrics=dashboardData();assert.ok(!metrics.resolved.some(c=>c.id===id));assert.ok(metrics.pending.some(c=>c.id===id));
   row=(await db.query('SELECT * FROM vw_chamados_metricas WHERE id=$1',[id])).rows[0];assert.equal(row.resolvido_em,null);assert.equal(row.sla_cumprido,null);assert.ok(row.sla_vencido);assert.equal(Number(row.tempo_atendimento_seg),beforeTime);
 });
-test('migração valida sem gravar, importa todos os vínculos e datas atomicamente e evita reimportação',async()=>{
-  const pacote=JSON.parse(await readFile(path.join(projectRoot,'fieldiqarchives/public/exemplo-migracao.json'),'utf8'));
-  const post=(p,confirmar)=>call('/migracoes',{method:'POST',body:{pacote:p,confirmar}});
-  assert.equal((await call('/migracoes',{cookie:supervisor,method:'POST',body:{pacote,confirmar:false}})).status,403);
-  let r=await post(pacote,false);assert.equal(r.status,200);assert.equal(r.data.resumo.criados.chamados,2);
-  assert.equal((await db.query("SELECT matricula FROM pessoas WHERE matricula='LEG-100'")).rows.length,0);
-  assert.equal((await db.query('SELECT * FROM referencias_legado')).rows.length,0);
-  const invalid=structuredClone(pacote);invalid.historicos[0].chamado_id='inexistente';assert.equal((await post(invalid,true)).status,400);
-  assert.equal((await db.query("SELECT matricula FROM pessoas WHERE matricula='LEG-100'")).rows.length,0);
-  r=await post(pacote,true);assert.equal(r.status,200);assert.ok(r.data.importado);
-  const c=(await db.query("SELECT * FROM vw_chamados_metricas WHERE elevador_codigo='LEG-BAR-088' AND status='resolvido'")).rows[0];
-  assert.equal(c.tecnico_matricula,'LEG-100');assert.equal(c.zona_id,'cap-04');assert.equal(new Date(c.aberto_em).toISOString(),'2026-01-10T12:00:00.000Z');assert.equal(c.tempo_resolucao_min,150);assert.equal(c.sla_cumprido,true);assert.equal(Number(c.tempo_atendimento_seg),0);
-  assert.equal((await db.query("SELECT ativo FROM pessoas WHERE matricula='LEG-100'")).rows[0].ativo,false);
-  assert.ok((await post(pacote,true)).data.ja_importado);
-  const changed=structuredClone(pacote);changed.locais[0].nome='Tentativa de sobrescrever';assert.equal((await post(changed,true)).status,409);
-});
 test('exportação de domínio restaura estrutura e vínculos sem divulgar CPF ou credenciais',async()=>{
   const sql=await exportDomainSQL(db,{role:'supervisor',zona_id:'cap-04'});
   assert.ok(!sql.includes('52998224725'));assert.ok(!sql.includes(person.senha));assert.ok(!sql.includes('scrypt:'));assert.ok(!sql.includes('pessoa@example.com'));
@@ -124,17 +109,16 @@ test('migração de esquema preserva banco da versão anterior e não reaplica a
   await mkdir(path.join(projectRoot,'test-results'),{recursive:true});const folder=await mkdtemp(path.join(projectRoot,'test-results','upgrade-'));
   const {PGlite}=await import('@electric-sql/pglite');let old=await PGlite.create(folder);
   await old.exec(await readFile(path.join(projectRoot,'database/001-schema.sql'),'utf8'));
-  await old.query("INSERT INTO pessoas(matricula,nome,role,cargo,regiao) VALUES ('OLD-001','Usuário existente','tecnico','Técnico','capital')");await old.close();
-  let upgraded=await createDatabase({dataDir:folder,demo:false});assert.equal((await upgraded.query("SELECT nome FROM pessoas WHERE matricula='OLD-001'")).rows[0].nome,'Usuário existente');await upgraded.close();
-  upgraded=await createDatabase({dataDir:folder,demo:false});try{assert.equal((await upgraded.query('SELECT * FROM schema_migrations')).rows.length,5);}finally{await upgraded.close();}
-});
-test('CSV de sistema anterior é convertido com campos, valores e padrões mapeados; CLI funciona em caminho com espaços',async()=>{
-  const folder=await mkdtemp(path.join(projectRoot,'test-results','csv legado '));
-  await writeFile(path.join(folder,'chamados.csv'),'NUM_OS;EQUIP;ASSUNTO;SITUACAO;DATA\n55;88;"Porta; sensor";F;2026-01-10T09:00:00-03:00\n','utf8');
-  const mapping={chamados:{colunas:{id:'NUM_OS',elevador_id:'EQUIP',titulo:'ASSUNTO',status:'SITUACAO',aberto_em:'DATA'},padroes:{sla_horas:24},valores:{status:{F:'resolvido'}}}};
-  const result=await convertFolder(folder,'Origem fictícia',mapping);
-  assert.equal(result.chamados[0].titulo,'Porta; sensor');assert.equal(result.chamados[0].status,'resolvido');assert.equal(result.chamados[0].elevador_id,'88');assert.equal(result.chamados[0].sla_horas,24);
-  await writeFile(path.join(folder,'mapping.json'),JSON.stringify(mapping));
-  execFileSync(process.execPath,[path.join(projectRoot,'scripts/convert-legacy.mjs'),folder,'Origem fictícia',path.join(folder,'pacote.json'),path.join(folder,'mapping.json')]);
-  assert.deepEqual(JSON.parse(await readFile(path.join(folder,'pacote.json'),'utf8')),result);
+  await old.query("INSERT INTO pessoas(matricula,nome,role,cargo,regiao) VALUES ('OLD-001','Usuário existente','tecnico','Técnico','capital')");
+  await old.query("INSERT INTO zonas VALUES ('old','capital','Zona existente','Local existente')");
+  await old.query("INSERT INTO locais(nome,endereco,bairro,zona_id) VALUES ('Local preservado','Endereço fictício','Bairro','old')");
+  await old.query("INSERT INTO elevadores(codigo,local_id,fabricante,modelo,numero_serie,capacidade_kg) VALUES ('OLD-001',1,'Fictício','Modelo','OLD-SERIE',600)");
+  for(const prioridade of ['critica','alta','media','baixa'])await old.query("INSERT INTO chamados(elevador_id,titulo,descricao,tipo_obra,prioridade,status,sla_horas,criado_por,tecnico_matricula) VALUES (1,$1,'Descrição preservada','mod_parcial',$2,'aberto',12,'OLD-001','OLD-001')",['Chamado '+prioridade,prioridade]);
+  const before=(await old.query('SELECT * FROM chamados ORDER BY id')).rows;await old.close();
+  let upgraded=await createDatabase({dataDir:folder,demo:false});assert.equal((await upgraded.query("SELECT nome FROM pessoas WHERE matricula='OLD-001'")).rows[0].nome,'Usuário existente');
+  const migrated=(await upgraded.query('SELECT * FROM chamados ORDER BY id')).rows;
+  assert.deepEqual(migrated.map(c=>c.prioridade),['A','A','B','C']);
+  for(let i=0;i<before.length;i++)for(const key of Object.keys(before[i]).filter(k=>k!=='prioridade'))assert.deepEqual(migrated[i][key],before[i][key],'Migração alterou '+key);
+  await upgraded.close();
+  upgraded=await createDatabase({dataDir:folder,demo:false});try{assert.equal((await upgraded.query('SELECT * FROM schema_migrations')).rows.length,9);}finally{await upgraded.close();}
 });
